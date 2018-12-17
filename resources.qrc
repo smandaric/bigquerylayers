@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/bigquery_layers" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>BigQueryLayersDockWidgetBase</class>
+ <widget class="QDockWidget" name="BigQueryLayersDockWidgetBase">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>232</width>
+    <height>387</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>BigQuery Layers</string>
+  </property>
+  <widget class="QWidget" name="dockWidgetContents">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="1" column="0">
+     <widget class="QLineEdit" name="project_edit"/>
+    </item>
+    <item row="3" column="0">
+     <widget class="QPlainTextEdit" name="query_edit"/>
+    </item>
+    <item row="0" column="0">
+     <widget class="QLabel" name="project_label">
+      <property name="text">
+       <string>Project</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="query_label">
+      <property name="text">
+       <string>Query</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <widget class="QLabel" name="query_progress_field">
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="12" column="0">
+     <widget class="QPushButton" name="add_extents_button">
+      <property name="text">
+       <string>Add extents</string>
+      </property>
+     </widget>
+    </item>
+    <item row="4" column="0">
+     <widget class="QPushButton" name="run_query_button">
+      <property name="text">
+       <string>Run Query</string>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="0">
+     <widget class="QPushButton" name="add_all_button">
+      <property name="text">
+       <string>Add all</string>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="0">
+     <widget class="QComboBox" name="geometry_column_combo_box"/>
+    </item>
+    <item row="7" column="0">
+     <widget class="QLabel" name="geometry_column_label">
+      <property name="text">
+       <string>Geometry column</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
