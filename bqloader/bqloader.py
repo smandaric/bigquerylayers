@@ -2,9 +2,11 @@ import time
 import tempfile
 import os
 import csv
+import sys
 
-#from google.cloud import bigquery
-from .libs.google.cloud import bigquery
+#Bigquery module as bundled dependencies
+sys.path.append(os.path.dirname(__file__)+'/libs')
+from google.cloud import bigquery
 
 PROJECT = 'uc-atlas'
 
@@ -86,8 +88,6 @@ class BigQueryConnector:
 
     def write_base_result(self):
         return BigQueryConnector.write_to_tempfile(self.base_query_job)
-
-
 
 
 print(bigquery.__version__)
