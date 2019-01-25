@@ -10,13 +10,6 @@ from google.cloud import bigquery
 
 PROJECT = 'uc-atlas'
 
-
-Q = """select
-*
-from 
-`proj_shoppertrack.venues_ny`"""
-
-
 class BigQueryConnector:
     def __init__(self, project=PROJECT):
         self.client = bigquery.Client(project)
@@ -88,24 +81,6 @@ class BigQueryConnector:
 
     def write_base_result(self):
         return BigQueryConnector.write_to_tempfile(self.base_query_job)
-
-
-print(bigquery.__version__)
-
-extent = "POLYGON((-73.83604682522111773 40.97637149309639426, -73.80852813550325209 40.97637149309639426, -73.80852813550325209 40.98573169479802658, -73.83604682522111773 40.98573169479802658, -73.83604682522111773 40.97637149309639426))"
-
-conn = BigQueryConnector()
-
-conn.set_query(Q)
-conn._run_base_query()
-print(conn.num_rows_base())
-
-conn.write_extent_result(extent, 'venue_geog')
-
-#print(conn.write_base_result())
-
-
-
 
 
 
