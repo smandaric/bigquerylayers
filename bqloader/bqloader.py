@@ -8,18 +8,17 @@ import sys
 sys.path.append(os.path.dirname(__file__)+'/libs')
 from google.cloud import bigquery
 
-PROJECT = 'uc-atlas'
-
 class BigQueryConnector:
-    def __init__(self, project=PROJECT):
-        self.client = bigquery.Client(project)
+    def __init__(self):
         self.timeout = 30
 
     def set_query(self, q):
         self.query_string = q
 
-    def _run_base_query(self):
+    def run_base_query(self, project):
         assert self.query_string
+        self.client = bigquery.Client(project)
+
         self.base_query_job = self.client.query(self.query_string)
         self.query_result = self.base_query_job.result()
 
