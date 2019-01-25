@@ -3,7 +3,8 @@ import tempfile
 import os
 import csv
 
-from google.cloud import bigquery
+#from google.cloud import bigquery
+from .libs.google.cloud import bigquery
 
 PROJECT = 'uc-atlas'
 
