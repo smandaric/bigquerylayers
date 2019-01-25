@@ -38,15 +38,20 @@ class BigQueryConnector:
         return BigQueryConnector.query_fields(self.base_query_job)
 
     def write_extent_result(self, extent, geo_field):
+        source_project = self.client.project
         source_dataset = self.base_query_job.destination.dataset_id
         source_table = self.base_query_job.destination.table_id
 
         q = """SELECT
               *
             FROM
-              `uc-atlas.{}.{}`
+              `{}.{}.{}`
             WHERE
-              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_dataset,source_table, geo_field, extent)
+              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_project,
+                                                                 source_dataset,
+                                                                 source_table,
+                                                                 geo_field,
+                                                                 extent)
 
         extent_query_job = self.client.query(q)
         filepath = BigQueryConnector.write_to_tempfile(extent_query_job)
