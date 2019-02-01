@@ -11,4 +11,9 @@ QGIS plugin for importing data from BigQuery
 1. Make sure the QGIS python interpreter has Google Cloud SDK installed
 2. Symlink the directory to the QGIS plugins folder
 
-*  Mac: `ln -s ${PWD} ~/Library/"Application Support"/QGIS/QGIS3/profiles/default/python/plugins` 
+*  Mac: `ln -s ${PWD} ~/Library/"Application Support"/QGIS/QGIS3/profiles/default/python/plugins`
+
+
+## Updating bundled BigQuery libs
+
+`pip install --target bqloader/libs google-cloud-bigquery --upgrade` 
