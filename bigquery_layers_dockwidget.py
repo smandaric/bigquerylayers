@@ -109,9 +109,9 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsMessageLog.logMessage('Running base query', 'BQ Layers', Qgis.Info)
         project_name = self.project_edit.text()
         query = self.query_edit.toPlainText()
-        self.bq = BigQueryConnector(project_name)
+        self.bq = BigQueryConnector()
         self.bq.set_query(query)
-        self.bq._run_base_query()
+        self.bq.run_base_query(project_name)
         # Always return exception. On_finished is broken inside objects
         # https://gis.stackexchange.com/questions/296175/issues-with-qgstask-and-task-manager/304801#304801
         raise EverythingIsFineException()

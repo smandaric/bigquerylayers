@@ -2,28 +2,23 @@ import time
 import tempfile
 import os
 import csv
+import sys
 
+#Bigquery module as bundled dependencies
+sys.path.append(os.path.dirname(__file__)+'/libs')
 from google.cloud import bigquery
 
-PROJECT = 'uc-atlas'
-
-
-Q = """select
-*
-from 
-`proj_shoppertrack.venues_ny`"""
-
-
 class BigQueryConnector:
-    def __init__(self, project=PROJECT):
-        self.client = bigquery.Client(project)
+    def __init__(self):
         self.timeout = 30
 
     def set_query(self, q):
         self.query_string = q
 
-    def _run_base_query(self):
+    def run_base_query(self, project):
         assert self.query_string
+        self.client = bigquery.Client(project)
+
         self.base_query_job = self.client.query(self.query_string)
         self.query_result = self.base_query_job.result()
 
@@ -43,15 +38,20 @@ class BigQueryConnector:
         return BigQueryConnector.query_fields(self.base_query_job)
 
     def write_extent_result(self, extent, geo_field):
+        source_project = self.client.project
         source_dataset = self.base_query_job.destination.dataset_id
         source_table = self.base_query_job.destination.table_id
 
         q = """SELECT
               *
             FROM
-              `uc-atlas.{}.{}`
+              `{}.{}.{}`
             WHERE
-              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_dataset,source_table, geo_field, extent)
+              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_project,
+                                                                 source_dataset,
+                                                                 source_table,
+                                                                 geo_field,
+                                                                 extent)
 
         extent_query_job = self.client.query(q)
         filepath = BigQueryConnector.write_to_tempfile(extent_query_job)
@@ -85,26 +85,6 @@ class BigQueryConnector:
 
     def write_base_result(self):
         return BigQueryConnector.write_to_tempfile(self.base_query_job)
-
-
-
-
-print(bigquery.__version__)
-
-extent = "POLYGON((-73.83604682522111773 40.97637149309639426, -73.80852813550325209 40.97637149309639426, -73.80852813550325209 40.98573169479802658, -73.83604682522111773 40.98573169479802658, -73.83604682522111773 40.97637149309639426))"
-
-conn = BigQueryConnector()
-
-conn.set_query(Q)
-conn._run_base_query()
-print(conn.num_rows_base())
-
-conn.write_extent_result(extent, 'venue_geog')
-
-#print(conn.write_base_result())
-
-
-
 
 
 
