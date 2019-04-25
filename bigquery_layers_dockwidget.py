@@ -150,6 +150,8 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     elm.setEnabled(True)
                 self.run_query_button.setText('Run query')
                 self.query_progress_field.setText('Errors in base query')
+                self.iface.messageBar().pushMessage("BigQuery Layers", "Query failed: " + exception.__repr__(), level=Qgis.Critical)
+                QgsMessageLog.logMessage('Running add full layer', 'BQ Layers', Qgis.Info)
                 # TODO: Display exception
                 raise exception
 
