@@ -25,7 +25,7 @@ from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QAction
 # Initialize Qt resources from file resources.py
-#from .resources import *
+from .resources import *
 
 # Import the code for the DockWidget
 from .bigquery_layers_dockwidget import BigQueryLayersDockWidget
@@ -157,7 +157,7 @@ class BigQueryLayers:
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToMenu(
+            self.iface.addPluginToDatabaseMenu(
                 self.menu,
                 action)
 
@@ -204,7 +204,7 @@ class BigQueryLayers:
         #print "** UNLOAD BigQueryLayers"
 
         for action in self.actions:
-            self.iface.removePluginMenu(
+            self.iface.removePluginDatabaseMenu(
                 self.tr(u'&BigQuery Layers'),
                 action)
             self.iface.removeToolBarIcon(action)
