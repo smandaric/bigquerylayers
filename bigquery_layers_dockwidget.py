@@ -150,7 +150,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     elm.setEnabled(True)
                 self.run_query_button.setText('Run query')
                 self.query_progress_field.setText('Errors in base query')
-                # TODO: Display exception
+                self.iface.messageBar().pushMessage("BigQuery Layers", "Query failed: " + exception.__repr__(), level=Qgis.Critical)
                 raise exception
 
     def add_full_layer(self, task, uri):
@@ -173,7 +173,12 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         assert self.base_query_complete
 
         geom_field = self.geometry_column_combo_box.currentText()
-        uri = 'file://{{file}}?delimiter=,&crs=epsg:4326&wktField={field}'.format(field=geom_field)
+
+        # Windows support
+        if os.name == 'nt':
+            uri = 'file:///{{file}}?delimiter=,&crs=epsg:4326&wktField={field}'.format(field=geom_field)
+        else:
+            uri = 'file://{{file}}?delimiter=,&crs=epsg:4326&wktField={field}'.format(field=geom_field)
 
         for elm in self.base_query_elements + self.layer_import_elements:
             elm.setEnabled(False)
