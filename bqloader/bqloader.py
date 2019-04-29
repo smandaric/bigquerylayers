@@ -4,8 +4,8 @@ import os
 import csv
 import sys
 
-#Bigquery module as bundled dependencies
-sys.path.append(os.path.dirname(__file__)+'/libs')
+#Bigquery module as bundled dependencies, prepend path in case already installed in environment
+sys.path = [os.path.join(os.path.dirname(__file__), 'libs')] + sys.path
 from google.cloud import bigquery
 
 class BigQueryConnector:
