@@ -211,12 +211,16 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QgsMessageLog.logMessage('Layer added', 'BQ Layers', Qgis.Info)
             if isinstance(exception, EverythingIsFineException):
                 # Must be done in main thread
-                self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
-                self.add_all_button.setText('Add all')
-                self.add_extents_button.setText('Add window extents')
-            else:
-                print(exception)
+                try:
+                    vlayer = self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
+                except Exception as e:
+                    print(e)
 
+            else:
+                QgsMessageLog.logMessage(exception.__repr__(), 'BQ Layers', Qgis.Critical)
+
+            self.add_all_button.setText('Add all')
+            self.add_extents_button.setText('Add window extents')
             for elm in self.base_query_elements + self.layer_import_elements:
                 elm.setEnabled(True)
 
