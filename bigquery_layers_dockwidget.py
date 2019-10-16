@@ -191,12 +191,17 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.add_extents_button.setText('Adding layer...')
             QgsMessageLog.logMessage('Add layer', 'BQ Layers', Qgis.Info)
             extent = self.iface.mapCanvas().extent()
-            crcSource = QgsCoordinateReferenceSystem(3857)
-            crcTarget = QgsCoordinateReferenceSystem(4326)
-            transform = QgsCoordinateTransform(crcSource, crcTarget, QgsProject.instance())
-            extent_wkt = transform.transform(extent).asWktPolygon()
+
+            # Reproject extents if project CRS is not EPSG:4326
+            project_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
+            
+            if project_crs != QgsCoordinateReferenceSystem(4326):
+                crcTarget = QgsCoordinateReferenceSystem(4326)
+                transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
+                extent = transform.transform(extent)
+
             task = QgsTask.fromFunction('Add layer', self.add_extents, on_finished=self.layer_added,
-                                        uri=uri, extent_wkt=extent_wkt, geom_field=geom_field)
+                                        uri=uri, extent_wkt=extent.asWktPolygon(), geom_field=geom_field)
 
         self.run_query_button.repaint()
         QgsApplication.taskManager().addTask(task)
