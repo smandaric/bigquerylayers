@@ -38,27 +38,36 @@ class BigQueryConnector:
         return BigQueryConnector.query_fields(self.base_query_job)
 
     def write_extent_result(self, extent, geo_field):
-        source_project = self.client.project
-        source_dataset = self.base_query_job.destination.dataset_id
-        source_table = self.base_query_job.destination.table_id
+        source_table_path = '.'.join([self.client.project,
+                                    self.base_query_job.destination.dataset_id,
+                                    self.base_query_job.destination.table_id])
 
-        q = """SELECT
+        source_table = self.client.get_table(source_table_path)
+        source_table_geo_field = [field for field in source_table.schema if field.name == geo_field][0]
+
+        if source_table_geo_field.field_type == 'GEOGRAPHY':
+            q = """SELECT
               *
             FROM
-              `{}.{}.{}`
+              `{}`
             WHERE
-              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_project,
-                                                                 source_dataset,
-                                                                 source_table,
+              ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(source_table_path,
                                                                  geo_field,
                                                                  extent)
+        else:
+            q = """SELECT
+                *
+                FROM
+                `{}`
+                WHERE
+                    ST_INTERSECTS(ST_GEOGFROMTEXT({}), ST_GEOGFROMTEXT('{}'))""".format(source_table_path,
+                                                                        geo_field,
+                                                                        extent)
 
         extent_query_job = self.client.query(q)
         filepath = BigQueryConnector.write_to_tempfile(extent_query_job)
 
         return filepath
-
-
 
 
     @staticmethod
