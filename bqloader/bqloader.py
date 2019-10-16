@@ -11,6 +11,7 @@ from google.cloud import bigquery
 class BigQueryConnector:
     def __init__(self):
         self.timeout = 30
+        self.last_query_run = None
 
     def set_query(self, q):
         self.query_string = q
@@ -21,6 +22,7 @@ class BigQueryConnector:
 
         self.base_query_job = self.client.query(self.query_string)
         self.query_result = self.base_query_job.result()
+        self.last_query_run = self.base_query_job
 
     def base_query_status(self):
         return self.base_query_job.done()
@@ -65,6 +67,7 @@ class BigQueryConnector:
                                                                         extent)
 
         extent_query_job = self.client.query(q)
+        self.last_query_run = extent_query_job
         filepath = BigQueryConnector.write_to_tempfile(extent_query_job)
 
         return filepath

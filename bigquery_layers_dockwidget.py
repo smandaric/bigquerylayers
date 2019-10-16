@@ -98,15 +98,15 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.run_query_button.setText('Running...')
         self.run_query_button.repaint()
 
-        QgsMessageLog.logMessage('Button pressed', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('Button pressed', 'BigQuery Layers', Qgis.Info)
 
         # Run query as a task
         base_query_task = QgsTask.fromFunction('Base query task', self.run_base_query, on_finished=self.base_query_completed)
         QgsApplication.taskManager().addTask(base_query_task)
-        QgsMessageLog.logMessage('Button pressed bottom', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('Button pressed bottom', 'BigQuery Layers', Qgis.Info)
 
     def run_base_query(self, task):
-        QgsMessageLog.logMessage('Running base query', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('Running base query', 'BigQuery Layers', Qgis.Info)
         project_name = self.project_edit.text()
         query = self.query_edit.toPlainText()
         self.bq = BigQueryConnector()
@@ -119,11 +119,11 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def base_query_completed(self, exception, result=None):
         if exception is None:
             # Should always return exception
-            QgsMessageLog.logMessage('This should not occur', 'BQ Layers', Qgis.Info)
+            QgsMessageLog.logMessage('This should not occur', 'BigQuery Layers', Qgis.Info)
         else:
             if isinstance(exception, EverythingIsFineException):
                 # Query completed without errors
-                QgsMessageLog.logMessage('Completed fine', 'BQ Layers', Qgis.Info)
+                QgsMessageLog.logMessage('Completed fine', 'BigQuery Layers', Qgis.Info)
 
                 # Number of rows in query
                 rowcount = str(self.bq.num_rows_base())
@@ -142,7 +142,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 self.run_query_button.setText('Run query')
 
             else:
-                QgsMessageLog.logMessage('Completed with errors', 'BQ Layers', Qgis.Info)
+                QgsMessageLog.logMessage('Completed with errors', 'BigQuery Layers', Qgis.Info)
                 self.base_query_complete = False
 
                 # Enable top buttons, import buttons are disabled
@@ -154,7 +154,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 raise exception
 
     def add_full_layer(self, task, uri):
-        QgsMessageLog.logMessage('Running add full layer', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('Running add full layer', 'BigQuery Layers', Qgis.Info)
 
         layer_file = self.bq.write_base_result()
         self.layer_uri = uri.format(file=layer_file)
@@ -162,7 +162,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         raise EverythingIsFineException()
 
     def add_extents(self, task, uri, extent_wkt, geom_field):
-        QgsMessageLog.logMessage('Running add extent layer', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('Running add extent layer', 'BigQuery Layers', Qgis.Info)
 
         layer_file = self.bq.write_extent_result(extent_wkt, geom_field)
         self.layer_uri = uri.format(file=layer_file)
@@ -184,12 +184,12 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             elm.setEnabled(False)
 
         if self.sender().objectName() == 'add_all_button':
-            QgsMessageLog.logMessage('Pressed add all', 'BQ Layers', Qgis.Info)
+            QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
             self.add_all_button.setText('Adding layer...')
             task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)
         elif self.sender().objectName() == 'add_extents_button':
             self.add_extents_button.setText('Adding layer...')
-            QgsMessageLog.logMessage('Add layer', 'BQ Layers', Qgis.Info)
+            QgsMessageLog.logMessage('Add layer', 'BigQuery Layers', Qgis.Info)
             extent = self.iface.mapCanvas().extent()
 
             # Reproject extents if project CRS is not EPSG:4326
@@ -206,23 +206,26 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.run_query_button.repaint()
         QgsApplication.taskManager().addTask(task)
         # For some reason it needs to log in order for tasks to run
-        QgsMessageLog.logMessage('After add button', 'BQ Layers', Qgis.Info)
+        QgsMessageLog.logMessage('After add button', 'BigQuery Layers', Qgis.Info)
 
     def layer_added(self, exception, result=None):
         if exception is None:
             # Should always return exception
-            QgsMessageLog.logMessage('This should not occur', 'BQ Layers', Qgis.Info)
+            QgsMessageLog.logMessage('This should not occur', 'BigQuery Layers', Qgis.Info)
         else:
-            QgsMessageLog.logMessage('Layer added', 'BQ Layers', Qgis.Info)
+            QgsMessageLog.logMessage('Layer added', 'BigQuery Layers', Qgis.Info)
             if isinstance(exception, EverythingIsFineException):
                 # Must be done in main thread
                 try:
                     vlayer = self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
+                    elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
+                    self.iface.messageBar().pushMessage("BigQuery Layers", "Added {} elements".format(elements_added), 
+                        level=Qgis.Info)
                 except Exception as e:
                     print(e)
 
             else:
-                QgsMessageLog.logMessage(exception.__repr__(), 'BQ Layers', Qgis.Critical)
+                QgsMessageLog.logMessage(exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
 
             self.add_all_button.setText('Add all')
             self.add_extents_button.setText('Add window extents')
