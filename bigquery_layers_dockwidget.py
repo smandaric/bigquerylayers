@@ -218,9 +218,10 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 # Must be done in main thread
                 try:
                     vlayer = self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
-                    elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
-                    self.iface.messageBar().pushMessage("BigQuery Layers", "Added {} elements".format(elements_added), 
-                        level=Qgis.Info)
+                    if vlayer:
+                        elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
+                        self.iface.messageBar().pushMessage("BigQuery Layers", "Added {} elements".format(elements_added), 
+                            level=Qgis.Info)
                 except Exception as e:
                     print(e)
 
