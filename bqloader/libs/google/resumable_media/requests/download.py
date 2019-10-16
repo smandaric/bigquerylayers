@@ -27,7 +27,7 @@ from google.resumable_media.requests import _helpers
 
 _LOGGER = logging.getLogger(__name__)
 _SINGLE_GET_CHUNK_SIZE = 8192
-_HASH_HEADER = u'x-goog-hash'
+_HASH_HEADER = u"x-goog-hash"
 _MISSING_MD5 = u"""\
 No MD5 checksum was returned from the service while downloading {}
 (which happens for composite objects), so client-side content integrity
@@ -84,8 +84,7 @@ class Download(_helpers.RequestsMixin, _download.Download):
             can be detected from the ``X-Goog-Hash`` header.
         """
         headers = self._get_headers(response)
-        expected_md5_hash = _parse_md5_header(
-            headers.get(_HASH_HEADER), response)
+        expected_md5_hash = _parse_md5_header(headers.get(_HASH_HEADER), response)
 
         if expected_md5_hash is None:
             msg = _MISSING_MD5.format(self.media_url)
@@ -119,7 +118,8 @@ class Download(_helpers.RequestsMixin, _download.Download):
             #       it with a ``_DoNothingHash``.
             local_hash = _add_decoder(response.raw, md5_hash)
             body_iter = response.iter_content(
-                chunk_size=_SINGLE_GET_CHUNK_SIZE, decode_unicode=False)
+                chunk_size=_SINGLE_GET_CHUNK_SIZE, decode_unicode=False
+            )
             for chunk in body_iter:
                 self._stream.write(chunk)
                 local_hash.update(chunk)
@@ -130,10 +130,11 @@ class Download(_helpers.RequestsMixin, _download.Download):
         actual_md5_hash = base64.b64encode(md5_hash.digest())
         # NOTE: ``b64encode`` returns ``bytes``, but ``expected_md5_hash``
         #       came from a header, so it will be ``str``.
-        actual_md5_hash = actual_md5_hash.decode(u'utf-8')
+        actual_md5_hash = actual_md5_hash.decode(u"utf-8")
         if actual_md5_hash != expected_md5_hash:
             msg = _CHECKSUM_MISMATCH.format(
-                self.media_url, expected_md5_hash, actual_md5_hash)
+                self.media_url, expected_md5_hash, actual_md5_hash
+            )
             raise common.DataCorruption(response, msg)
 
     def consume(self, transport):
@@ -158,15 +159,14 @@ class Download(_helpers.RequestsMixin, _download.Download):
         method, url, payload, headers = self._prepare_request()
         # NOTE: We assume "payload is None" but pass it along anyway.
         request_kwargs = {
-            u'data': payload,
-            u'headers': headers,
-            u'retry_strategy': self._retry_strategy,
+            u"data": payload,
+            u"headers": headers,
+            u"retry_strategy": self._retry_strategy,
         }
         if self._stream is not None:
-            request_kwargs[u'stream'] = True
+            request_kwargs[u"stream"] = True
 
-        result = _helpers.http_request(
-            transport, method, url, **request_kwargs)
+        result = _helpers.http_request(transport, method, url, **request_kwargs)
 
         self._process_response(result)
 
@@ -220,8 +220,13 @@ class ChunkedDownload(_helpers.RequestsMixin, _download.ChunkedDownload):
         method, url, payload, headers = self._prepare_request()
         # NOTE: We assume "payload is None" but pass it along anyway.
         result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
         self._process_response(result)
         return result
 
@@ -258,9 +263,9 @@ def _parse_md5_header(header_value, response):
         return None
 
     matches = []
-    for checksum in header_value.split(u','):
-        name, value = checksum.split(u'=', 1)
-        if name == u'md5':
+    for checksum in header_value.split(u","):
+        name, value = checksum.split(u"=", 1)
+        if name == u"md5":
             matches.append(value)
 
     if len(matches) == 0:
@@ -270,7 +275,7 @@ def _parse_md5_header(header_value, response):
     else:
         raise common.InvalidResponse(
             response,
-            u'X-Goog-Hash header had multiple ``md5`` values.',
+            u"X-Goog-Hash header had multiple ``md5`` values.",
             header_value,
             matches,
         )
@@ -312,8 +317,8 @@ def _add_decoder(response_raw, md5_hash):
         if ``_decoder`` is not patched. Otherwise, returns a ``_DoNothingHash``
         since the caller will no longer need to hash to decoded bytes.
     """
-    encoding = response_raw.headers.get(u'content-encoding', u'').lower()
-    if encoding != u'gzip':
+    encoding = response_raw.headers.get(u"content-encoding", u"").lower()
+    if encoding != u"gzip":
         return md5_hash
 
     response_raw._decoder = _GzipDecoder(md5_hash)

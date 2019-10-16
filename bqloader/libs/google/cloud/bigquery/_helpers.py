@@ -15,8 +15,10 @@
 """Shared helper functions for BigQuery API classes."""
 
 import base64
+import copy
 import datetime
 import decimal
+import re
 
 from google.cloud._helpers import UTC
 from google.cloud._helpers import _date_from_iso8601_date
@@ -28,6 +30,12 @@ from google.cloud._helpers import _to_bytes
 _RFC3339_MICROS_NO_ZULU = "%Y-%m-%dT%H:%M:%S.%f"
 _TIMEONLY_WO_MICROS = "%H:%M:%S"
 _TIMEONLY_W_MICROS = "%H:%M:%S.%f"
+_PROJECT_PREFIX_PATTERN = re.compile(
+    r"""
+    (?P<project_id>\S+\:[^.]+)\.(?P<dataset_id>[^.]+)(?:$|\.(?P<custom_id>[^.]+)$)
+""",
+    re.VERBOSE,
+)
 
 
 def _not_null(value, field):
@@ -196,6 +204,14 @@ def _field_to_index_mapping(schema):
     return {f.name: i for i, f in enumerate(schema)}
 
 
+def _field_from_json(resource, field):
+    converter = _CELLDATA_FROM_JSON.get(field.field_type, lambda value, _: value)
+    if field.mode == "REPEATED":
+        return [converter(item["v"], field) for item in resource]
+    else:
+        return converter(resource, field)
+
+
 def _row_tuple_from_json(row, schema):
     """Convert JSON row data to row with appropriate types.
 
@@ -213,12 +229,7 @@ def _row_tuple_from_json(row, schema):
     """
     row_data = []
     for field, cell in zip(schema, row["f"]):
-        converter = _CELLDATA_FROM_JSON[field.field_type]
-        if field.mode == "REPEATED":
-            row_data.append([converter(item["v"], field) for item in cell["v"]])
-        else:
-            row_data.append(converter(cell["v"], field))
-
+        row_data.append(_field_from_json(cell["v"], field))
     return tuple(row_data)
 
 
@@ -327,6 +338,115 @@ _SCALAR_VALUE_TO_JSON_ROW = {
 # Converters used for scalar values marshalled as query parameters.
 _SCALAR_VALUE_TO_JSON_PARAM = _SCALAR_VALUE_TO_JSON_ROW.copy()
 _SCALAR_VALUE_TO_JSON_PARAM["TIMESTAMP"] = _timestamp_to_json_parameter
+
+
+def _scalar_field_to_json(field, row_value):
+    """Maps a field and value to a JSON-safe value.
+
+    Args:
+        field ( \
+            :class:`~google.cloud.bigquery.schema.SchemaField`, \
+        ):
+            The SchemaField to use for type conversion and field name.
+        row_value (any):
+            Value to be converted, based on the field's type.
+
+    Returns:
+        any:
+            A JSON-serializable object.
+    """
+    converter = _SCALAR_VALUE_TO_JSON_ROW.get(field.field_type)
+    if converter is None:  # STRING doesn't need converting
+        return row_value
+    return converter(row_value)
+
+
+def _repeated_field_to_json(field, row_value):
+    """Convert a repeated/array field to its JSON representation.
+
+    Args:
+        field ( \
+            :class:`~google.cloud.bigquery.schema.SchemaField`, \
+        ):
+            The SchemaField to use for type conversion and field name. The
+            field mode must equal ``REPEATED``.
+        row_value (Sequence[any]):
+            A sequence of values to convert to JSON-serializable values.
+
+    Returns:
+        List[any]:
+            A list of JSON-serializable objects.
+    """
+    # Remove the REPEATED, but keep the other fields. This allows us to process
+    # each item as if it were a top-level field.
+    item_field = copy.deepcopy(field)
+    item_field._mode = "NULLABLE"
+    values = []
+    for item in row_value:
+        values.append(_field_to_json(item_field, item))
+    return values
+
+
+def _record_field_to_json(fields, row_value):
+    """Convert a record/struct field to its JSON representation.
+
+    Args:
+        fields ( \
+            Sequence[:class:`~google.cloud.bigquery.schema.SchemaField`], \
+        ):
+            The :class:`~google.cloud.bigquery.schema.SchemaField`s of the
+            record's subfields to use for type conversion and field names.
+        row_value (Union[Tuple[Any], Mapping[str, Any]):
+            A tuple or dictionary to convert to JSON-serializable values.
+
+    Returns:
+        Mapping[str, any]:
+            A JSON-serializable dictionary.
+    """
+    record = {}
+    isdict = isinstance(row_value, dict)
+
+    for subindex, subfield in enumerate(fields):
+        subname = subfield.name
+        if isdict:
+            subvalue = row_value.get(subname)
+        else:
+            subvalue = row_value[subindex]
+        record[subname] = _field_to_json(subfield, subvalue)
+    return record
+
+
+def _field_to_json(field, row_value):
+    """Convert a field into JSON-serializable values.
+
+    Args:
+        field ( \
+            :class:`~google.cloud.bigquery.schema.SchemaField`, \
+        ):
+            The SchemaField to use for type conversion and field name.
+
+        row_value (Union[ \
+            Sequence[list], \
+            any, \
+        ]):
+            Row data to be inserted. If the SchemaField's mode is
+            REPEATED, assume this is a list. If not, the type
+            is inferred from the SchemaField's field_type.
+
+    Returns:
+        any:
+            A JSON-serializable object.
+    """
+    if row_value is None:
+        return None
+
+    if field.mode == "REPEATED":
+        return _repeated_field_to_json(field, row_value)
+
+    if field.field_type == "RECORD":
+        return _record_field_to_json(field.fields, row_value)
+
+    return _scalar_field_to_json(field, row_value)
 
 
 def _snake_to_camel_case(value):
@@ -471,3 +591,70 @@ def _str_or_none(value):
     """Helper: serialize value to JSON string."""
     if value is not None:
         return str(value)
+
+
+def _split_id(full_id):
+    """Helper: split full_id into composite parts.
+
+    Args:
+        full_id (str): Fully-qualified ID in standard SQL format.
+
+    Returns:
+        List[str]: ID's parts separated into components.
+    """
+    with_prefix = _PROJECT_PREFIX_PATTERN.match(full_id)
+    if with_prefix is None:
+        parts = full_id.split(".")
+    else:
+        parts = with_prefix.groups()
+        parts = [part for part in parts if part]
+    return parts
+
+
+def _parse_3_part_id(full_id, default_project=None, property_name="table_id"):
+    output_project_id = default_project
+    output_dataset_id = None
+    output_resource_id = None
+    parts = _split_id(full_id)
+
+    if len(parts) != 2 and len(parts) != 3:
+        raise ValueError(
+            "{property_name} must be a fully-qualified ID in "
+            'standard SQL format, e.g., "project.dataset.{property_name}", '
+            "got {}".format(full_id, property_name=property_name)
+        )
+
+    if len(parts) == 2 and not default_project:
+        raise ValueError(
+            "When default_project is not set, {property_name} must be a "
+            "fully-qualified ID in standard SQL format, "
+            'e.g., "project.dataset_id.{property_name}", got {}'.format(
+                full_id, property_name=property_name
+            )
+        )
+
+    if len(parts) == 2:
+        output_dataset_id, output_resource_id = parts
+    else:
+        output_project_id, output_dataset_id, output_resource_id = parts
+
+    return output_project_id, output_dataset_id, output_resource_id
+
+
+def _build_resource_from_properties(obj, filter_fields):
+    """Build a resource based on a ``_properties`` dictionary, filtered by
+    ``filter_fields``, which follow the name of the Python object.
+    """
+    partial = {}
+    for filter_field in filter_fields:
+        api_field = obj._PROPERTY_TO_API_FIELD.get(filter_field)
+        if api_field is None and filter_field not in obj._properties:
+            raise ValueError("No property %s" % filter_field)
+        elif api_field is not None:
+            partial[api_field] = obj._properties.get(api_field)
+        else:
+            # allows properties that are not defined in the library
+            # and properties that have the same name as API resource key
+            partial[filter_field] = obj._properties[filter_field]
+
+    return partial

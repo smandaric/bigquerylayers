@@ -12,17 +12,18 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-from google.api import annotations_pb2 as google_dot_api_dot_annotations__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
+from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='google/api/distribution.proto',
   package='google.api',
   syntax='proto3',
-  serialized_options=_b('\n\016com.google.apiB\021DistributionProtoP\001ZCgoogle.golang.org/genproto/googleapis/api/distribution;distribution'),
-  serialized_pb=_b('\n\x1dgoogle/api/distribution.proto\x12\ngoogle.api\x1a\x1cgoogle/api/annotations.proto\"\xae\x05\n\x0c\x44istribution\x12\r\n\x05\x63ount\x18\x01 \x01(\x03\x12\x0c\n\x04mean\x18\x02 \x01(\x01\x12 \n\x18sum_of_squared_deviation\x18\x03 \x01(\x01\x12-\n\x05range\x18\x04 \x01(\x0b\x32\x1e.google.api.Distribution.Range\x12>\n\x0e\x62ucket_options\x18\x06 \x01(\x0b\x32&.google.api.Distribution.BucketOptions\x12\x15\n\rbucket_counts\x18\x07 \x03(\x03\x1a!\n\x05Range\x12\x0b\n\x03min\x18\x01 \x01(\x01\x12\x0b\n\x03max\x18\x02 \x01(\x01\x1a\xb5\x03\n\rBucketOptions\x12G\n\x0elinear_buckets\x18\x01 \x01(\x0b\x32-.google.api.Distribution.BucketOptions.LinearH\x00\x12Q\n\x13\x65xponential_buckets\x18\x02 \x01(\x0b\x32\x32.google.api.Distribution.BucketOptions.ExponentialH\x00\x12K\n\x10\x65xplicit_buckets\x18\x03 \x01(\x0b\x32/.google.api.Distribution.BucketOptions.ExplicitH\x00\x1a\x43\n\x06Linear\x12\x1a\n\x12num_finite_buckets\x18\x01 \x01(\x05\x12\r\n\x05width\x18\x02 \x01(\x01\x12\x0e\n\x06offset\x18\x03 \x01(\x01\x1aO\n\x0b\x45xponential\x12\x1a\n\x12num_finite_buckets\x18\x01 \x01(\x05\x12\x15\n\rgrowth_factor\x18\x02 \x01(\x01\x12\r\n\x05scale\x18\x03 \x01(\x01\x1a\x1a\n\x08\x45xplicit\x12\x0e\n\x06\x62ounds\x18\x01 \x03(\x01\x42\t\n\x07optionsBj\n\x0e\x63om.google.apiB\x11\x44istributionProtoP\x01ZCgoogle.golang.org/genproto/googleapis/api/distribution;distributionb\x06proto3')
+  serialized_options=_b('\n\016com.google.apiB\021DistributionProtoP\001ZCgoogle.golang.org/genproto/googleapis/api/distribution;distribution\242\002\004GAPI'),
+  serialized_pb=_b('\n\x1dgoogle/api/distribution.proto\x12\ngoogle.api\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd9\x06\n\x0c\x44istribution\x12\r\n\x05\x63ount\x18\x01 \x01(\x03\x12\x0c\n\x04mean\x18\x02 \x01(\x01\x12 \n\x18sum_of_squared_deviation\x18\x03 \x01(\x01\x12-\n\x05range\x18\x04 \x01(\x0b\x32\x1e.google.api.Distribution.Range\x12>\n\x0e\x62ucket_options\x18\x06 \x01(\x0b\x32&.google.api.Distribution.BucketOptions\x12\x15\n\rbucket_counts\x18\x07 \x03(\x03\x12\x34\n\texemplars\x18\n \x03(\x0b\x32!.google.api.Distribution.Exemplar\x1a!\n\x05Range\x12\x0b\n\x03min\x18\x01 \x01(\x01\x12\x0b\n\x03max\x18\x02 \x01(\x01\x1a\xb5\x03\n\rBucketOptions\x12G\n\x0elinear_buckets\x18\x01 \x01(\x0b\x32-.google.api.Distribution.BucketOptions.LinearH\x00\x12Q\n\x13\x65xponential_buckets\x18\x02 \x01(\x0b\x32\x32.google.api.Distribution.BucketOptions.ExponentialH\x00\x12K\n\x10\x65xplicit_buckets\x18\x03 \x01(\x0b\x32/.google.api.Distribution.BucketOptions.ExplicitH\x00\x1a\x43\n\x06Linear\x12\x1a\n\x12num_finite_buckets\x18\x01 \x01(\x05\x12\r\n\x05width\x18\x02 \x01(\x01\x12\x0e\n\x06offset\x18\x03 \x01(\x01\x1aO\n\x0b\x45xponential\x12\x1a\n\x12num_finite_buckets\x18\x01 \x01(\x05\x12\x15\n\rgrowth_factor\x18\x02 \x01(\x01\x12\r\n\x05scale\x18\x03 \x01(\x01\x1a\x1a\n\x08\x45xplicit\x12\x0e\n\x06\x62ounds\x18\x01 \x03(\x01\x42\t\n\x07options\x1as\n\x08\x45xemplar\x12\r\n\x05value\x18\x01 \x01(\x01\x12-\n\ttimestamp\x18\x02 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12)\n\x0b\x61ttachments\x18\x03 \x03(\x0b\x32\x14.google.protobuf.AnyBq\n\x0e\x63om.google.apiB\x11\x44istributionProtoP\x01ZCgoogle.golang.org/genproto/googleapis/api/distribution;distribution\xa2\x02\x04GAPIb\x06proto3')
   ,
-  dependencies=[google_dot_api_dot_annotations__pb2.DESCRIPTOR,])
+  dependencies=[google_dot_protobuf_dot_any__pb2.DESCRIPTOR,google_dot_protobuf_dot_timestamp__pb2.DESCRIPTOR,])
 
 
 
@@ -60,8 +61,8 @@ _DISTRIBUTION_RANGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=289,
-  serialized_end=322,
+  serialized_start=373,
+  serialized_end=406,
 )
 
 _DISTRIBUTION_BUCKETOPTIONS_LINEAR = _descriptor.Descriptor(
@@ -104,8 +105,8 @@ _DISTRIBUTION_BUCKETOPTIONS_LINEAR = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=575,
-  serialized_end=642,
+  serialized_start=659,
+  serialized_end=726,
 )
 
 _DISTRIBUTION_BUCKETOPTIONS_EXPONENTIAL = _descriptor.Descriptor(
@@ -148,8 +149,8 @@ _DISTRIBUTION_BUCKETOPTIONS_EXPONENTIAL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=644,
-  serialized_end=723,
+  serialized_start=728,
+  serialized_end=807,
 )
 
 _DISTRIBUTION_BUCKETOPTIONS_EXPLICIT = _descriptor.Descriptor(
@@ -178,8 +179,8 @@ _DISTRIBUTION_BUCKETOPTIONS_EXPLICIT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=725,
-  serialized_end=751,
+  serialized_start=809,
+  serialized_end=835,
 )
 
 _DISTRIBUTION_BUCKETOPTIONS = _descriptor.Descriptor(
@@ -225,8 +226,52 @@ _DISTRIBUTION_BUCKETOPTIONS = _descriptor.Descriptor(
       name='options', full_name='google.api.Distribution.BucketOptions.options',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=325,
-  serialized_end=762,
+  serialized_start=409,
+  serialized_end=846,
+)
+
+_DISTRIBUTION_EXEMPLAR = _descriptor.Descriptor(
+  name='Exemplar',
+  full_name='google.api.Distribution.Exemplar',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='value', full_name='google.api.Distribution.Exemplar.value', index=0,
+      number=1, type=1, cpp_type=5, label=1,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='timestamp', full_name='google.api.Distribution.Exemplar.timestamp', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='attachments', full_name='google.api.Distribution.Exemplar.attachments', index=2,
+      number=3, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=848,
+  serialized_end=963,
 )
 
 _DISTRIBUTION = _descriptor.Descriptor(
@@ -278,10 +323,17 @@ _DISTRIBUTION = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='exemplars', full_name='google.api.Distribution.exemplars', index=6,
+      number=10, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
-  nested_types=[_DISTRIBUTION_RANGE, _DISTRIBUTION_BUCKETOPTIONS, ],
+  nested_types=[_DISTRIBUTION_RANGE, _DISTRIBUTION_BUCKETOPTIONS, _DISTRIBUTION_EXEMPLAR, ],
   enum_types=[
   ],
   serialized_options=None,
@@ -290,8 +342,8 @@ _DISTRIBUTION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=76,
-  serialized_end=762,
+  serialized_start=106,
+  serialized_end=963,
 )
 
 _DISTRIBUTION_RANGE.containing_type = _DISTRIBUTION
@@ -311,8 +363,12 @@ _DISTRIBUTION_BUCKETOPTIONS.fields_by_name['exponential_buckets'].containing_one
 _DISTRIBUTION_BUCKETOPTIONS.oneofs_by_name['options'].fields.append(
   _DISTRIBUTION_BUCKETOPTIONS.fields_by_name['explicit_buckets'])
 _DISTRIBUTION_BUCKETOPTIONS.fields_by_name['explicit_buckets'].containing_oneof = _DISTRIBUTION_BUCKETOPTIONS.oneofs_by_name['options']
+_DISTRIBUTION_EXEMPLAR.fields_by_name['timestamp'].message_type = google_dot_protobuf_dot_timestamp__pb2._TIMESTAMP
+_DISTRIBUTION_EXEMPLAR.fields_by_name['attachments'].message_type = google_dot_protobuf_dot_any__pb2._ANY
+_DISTRIBUTION_EXEMPLAR.containing_type = _DISTRIBUTION
 _DISTRIBUTION.fields_by_name['range'].message_type = _DISTRIBUTION_RANGE
 _DISTRIBUTION.fields_by_name['bucket_options'].message_type = _DISTRIBUTION_BUCKETOPTIONS
+_DISTRIBUTION.fields_by_name['exemplars'].message_type = _DISTRIBUTION_EXEMPLAR
 DESCRIPTOR.message_types_by_name['Distribution'] = _DISTRIBUTION
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -352,6 +408,13 @@ Distribution = _reflection.GeneratedProtocolMessageType('Distribution', (_messag
     # @@protoc_insertion_point(class_scope:google.api.Distribution.BucketOptions)
     ))
   ,
+
+  Exemplar = _reflection.GeneratedProtocolMessageType('Exemplar', (_message.Message,), dict(
+    DESCRIPTOR = _DISTRIBUTION_EXEMPLAR,
+    __module__ = 'google.api.distribution_pb2'
+    # @@protoc_insertion_point(class_scope:google.api.Distribution.Exemplar)
+    ))
+  ,
   DESCRIPTOR = _DISTRIBUTION,
   __module__ = 'google.api.distribution_pb2'
   # @@protoc_insertion_point(class_scope:google.api.Distribution)
@@ -362,6 +425,7 @@ _sym_db.RegisterMessage(Distribution.BucketOptions)
 _sym_db.RegisterMessage(Distribution.BucketOptions.Linear)
 _sym_db.RegisterMessage(Distribution.BucketOptions.Exponential)
 _sym_db.RegisterMessage(Distribution.BucketOptions.Explicit)
+_sym_db.RegisterMessage(Distribution.Exemplar)
 
 
 DESCRIPTOR._options = None

@@ -192,6 +192,14 @@ class DescriptorTest(unittest.TestCase):
     self.assertTrue(enum_value_descriptor.has_options)
     self.assertFalse(other_enum_value_descriptor.has_options)
 
+  def testCustomOptionsCopyTo(self):
+    message_descriptor = (unittest_custom_options_pb2.
+                          TestMessageWithCustomOptions.DESCRIPTOR)
+    message_proto = descriptor_pb2.DescriptorProto()
+    message_descriptor.CopyToProto(message_proto)
+    self.assertEqual(len(message_proto.options.ListFields()),
+                     2)
+
   def testDifferentCustomOptionTypes(self):
     kint32min = -2**31
     kint64min = -2**63
@@ -452,6 +460,17 @@ class DescriptorTest(unittest.TestCase):
     self.assertEqual('attribute is not writable: has_options',
                      str(e.exception))
 
+  def testDefault(self):
+    message_descriptor = unittest_pb2.TestAllTypes.DESCRIPTOR
+    field = message_descriptor.fields_by_name['repeated_int32']
+    self.assertEqual(field.default_value, [])
+    field = message_descriptor.fields_by_name['repeated_nested_message']
+    self.assertEqual(field.default_value, [])
+    field = message_descriptor.fields_by_name['optionalgroup']
+    self.assertEqual(field.default_value, None)
+    field = message_descriptor.fields_by_name['optional_nested_message']
+    self.assertEqual(field.default_value, None)
+
 
 class NewDescriptorTest(DescriptorTest):
   """Redo the same tests as above, but with a separate DescriptorPool."""
@@ -554,15 +573,15 @@ class GeneratedDescriptorTest(unittest.TestCase):
     self.assertNotEqual(mapping, {})
     self.assertNotEqual(mapping, 1)
     self.assertFalse(mapping == 1)  # Only for cpp test coverage
-    excepted_dict = dict(list(mapping.items()))
+    excepted_dict = dict(mapping.items())
     self.assertEqual(mapping, excepted_dict)
     self.assertEqual(mapping, mapping)
     self.assertGreater(len(mapping), 0)  # Sized
     self.assertEqual(len(mapping), len(excepted_dict))  # Iterable
     if sys.version_info >= (3,):
-      key, item = next(iter(list(mapping.items())))
+      key, item = next(iter(mapping.items()))
     else:
-      key, item = list(mapping.items())[0]
+      key, item = mapping.items()[0]
     self.assertIn(key, mapping)  # Container
     self.assertEqual(mapping.get(key), item)
     with self.assertRaises(TypeError):
@@ -573,15 +592,15 @@ class GeneratedDescriptorTest(unittest.TestCase):
     else:
       self.assertEqual(None, mapping.get([]))
     # keys(), iterkeys() &co
-    item = (next(iter(list(mapping.keys()))), next(iter(list(mapping.values()))))
-    self.assertEqual(item, next(iter(list(mapping.items()))))
+    item = (next(iter(mapping.keys())), next(iter(mapping.values())))
+    self.assertEqual(item, next(iter(mapping.items())))
     if sys.version_info < (3,):
       def CheckItems(seq, iterator):
         self.assertEqual(next(iterator), seq[0])
         self.assertEqual(list(iterator), seq[1:])
-      CheckItems(list(mapping.keys()), iter(mapping.keys()))
-      CheckItems(list(mapping.values()), iter(mapping.values()))
-      CheckItems(list(mapping.items()), iter(mapping.items()))
+      CheckItems(mapping.keys(), mapping.iterkeys())
+      CheckItems(mapping.values(), mapping.itervalues())
+      CheckItems(mapping.items(), mapping.iteritems())
     excepted_dict[key] = 'change value'
     self.assertNotEqual(mapping, excepted_dict)
     del excepted_dict[key]
@@ -591,7 +610,7 @@ class GeneratedDescriptorTest(unittest.TestCase):
     self.assertRaises(KeyError, mapping.__getitem__, len(mapping) + 1)
     # TODO(jieluo): Add __repr__ support for DescriptorMapping.
     if api_implementation.Type() == 'python':
-      self.assertEqual(len(str(dict(list(mapping.items())))), len(str(mapping)))
+      self.assertEqual(len(str(dict(mapping.items()))), len(str(mapping)))
     else:
       self.assertEqual(str(mapping)[0], '<')
 
@@ -630,6 +649,14 @@ class GeneratedDescriptorTest(unittest.TestCase):
     values_iter = iter(enum.values)
     del enum
     self.assertEqual('FOO', next(values_iter).name)
+
+  def testDescriptorNestedTypesContainer(self):
+    message_descriptor = unittest_pb2.TestAllTypes.DESCRIPTOR
+    nested_message_descriptor = unittest_pb2.TestAllTypes.NestedMessage.DESCRIPTOR
+    self.assertEqual(len(message_descriptor.nested_types), 3)
+    self.assertFalse(None in message_descriptor.nested_types)
+    self.assertTrue(
+        nested_message_descriptor in message_descriptor.nested_types)
 
   def testServiceDescriptor(self):
     service_descriptor = unittest_pb2.DESCRIPTOR.services_by_name['TestService']

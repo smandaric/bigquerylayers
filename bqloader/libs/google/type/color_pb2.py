@@ -19,8 +19,8 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='google/type/color.proto',
   package='google.type',
   syntax='proto3',
-  serialized_options=_b('\n\017com.google.typeB\nColorProtoP\001Z6google.golang.org/genproto/googleapis/type/color;color\242\002\003GTP'),
-  serialized_pb=_b('\n\x17google/type/color.proto\x12\x0bgoogle.type\x1a\x1egoogle/protobuf/wrappers.proto\"]\n\x05\x43olor\x12\x0b\n\x03red\x18\x01 \x01(\x02\x12\r\n\x05green\x18\x02 \x01(\x02\x12\x0c\n\x04\x62lue\x18\x03 \x01(\x02\x12*\n\x05\x61lpha\x18\x04 \x01(\x0b\x32\x1b.google.protobuf.FloatValueB]\n\x0f\x63om.google.typeB\nColorProtoP\x01Z6google.golang.org/genproto/googleapis/type/color;color\xa2\x02\x03GTPb\x06proto3')
+  serialized_options=_b('\n\017com.google.typeB\nColorProtoP\001Z6google.golang.org/genproto/googleapis/type/color;color\370\001\001\242\002\003GTP'),
+  serialized_pb=_b('\n\x17google/type/color.proto\x12\x0bgoogle.type\x1a\x1egoogle/protobuf/wrappers.proto\"]\n\x05\x43olor\x12\x0b\n\x03red\x18\x01 \x01(\x02\x12\r\n\x05green\x18\x02 \x01(\x02\x12\x0c\n\x04\x62lue\x18\x03 \x01(\x02\x12*\n\x05\x61lpha\x18\x04 \x01(\x0b\x32\x1b.google.protobuf.FloatValueB`\n\x0f\x63om.google.typeB\nColorProtoP\x01Z6google.golang.org/genproto/googleapis/type/color;color\xf8\x01\x01\xa2\x02\x03GTPb\x06proto3')
   ,
   dependencies=[google_dot_protobuf_dot_wrappers__pb2.DESCRIPTOR,])
 

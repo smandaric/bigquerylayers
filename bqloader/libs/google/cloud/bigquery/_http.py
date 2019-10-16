@@ -19,23 +19,26 @@ from google.cloud import _http
 from google.cloud.bigquery import __version__
 
 
-_CLIENT_INFO = _http.CLIENT_INFO_TEMPLATE.format(__version__)
-
-
 class Connection(_http.JSONConnection):
     """A connection to Google BigQuery via the JSON REST API.
 
     :type client: :class:`~google.cloud.bigquery.client.Client`
     :param client: The client that owns the current connection.
+
+    :type client_info: :class:`~google.api_core.client_info.ClientInfo`
+    :param client_info: (Optional) instance used to generate user agent.
     """
 
-    API_BASE_URL = "https://www.googleapis.com"
-    """The base of the API call URL."""
+    DEFAULT_API_ENDPOINT = "https://bigquery.googleapis.com"
+
+    def __init__(self, client, client_info=None, api_endpoint=DEFAULT_API_ENDPOINT):
+        super(Connection, self).__init__(client, client_info)
+        self.API_BASE_URL = api_endpoint
+        self._client_info.gapic_version = __version__
+        self._client_info.client_library_version = __version__
 
     API_VERSION = "v2"
     """The version of the API, used in building the API call's URL."""
 
     API_URL_TEMPLATE = "{api_base_url}/bigquery/{api_version}{path}"
     """A template for the URL of a particular API call."""
-
-    _EXTRA_HEADERS = {_http.CLIENT_INFO_HEADER: _CLIENT_INFO}

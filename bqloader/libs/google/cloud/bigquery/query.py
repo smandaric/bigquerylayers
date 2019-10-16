@@ -126,8 +126,15 @@ class ScalarQueryParameter(_AbstractQueryParameter):
         """
         name = resource.get("name")
         type_ = resource["parameterType"]["type"]
-        value = resource["parameterValue"]["value"]
-        converted = _QUERY_PARAMS_FROM_JSON[type_](value, None)
+
+        # parameterValue might not be present if JSON resource originates
+        # from the back-end - the latter omits it for None values.
+        value = resource.get("parameterValue", {}).get("value")
+        if value is not None:
+            converted = _QUERY_PARAMS_FROM_JSON[type_](value, None)
+        else:
+            converted = None
+
         return cls(name, type_, converted)
 
     def to_api_repr(self):
@@ -230,7 +237,9 @@ class ArrayQueryParameter(_AbstractQueryParameter):
     def _from_api_repr_scalar(cls, resource):
         name = resource.get("name")
         array_type = resource["parameterType"]["arrayType"]["type"]
-        values = [value["value"] for value in resource["parameterValue"]["arrayValues"]]
+        parameter_value = resource.get("parameterValue", {})
+        array_values = parameter_value.get("arrayValues", ())
+        values = [value["value"] for value in array_values]
         converted = [
             _QUERY_PARAMS_FROM_JSON[array_type](value, None) for value in values
         ]

@@ -44,7 +44,7 @@ from google.protobuf import unittest_import_pb2
 from google.protobuf import unittest_pb2
 
 try:
-  int        # Python 2
+  long        # Python 2
 except NameError:
   long = int  # Python 3
 
@@ -80,7 +80,7 @@ def SetAllNonLazyFields(message):
   message.optional_float    = 111
   message.optional_double   = 112
   message.optional_bool     = True
-  message.optional_string   = '115'
+  message.optional_string   = u'115'
   message.optional_bytes    = b'116'
 
   if IsProto2(message):
@@ -95,8 +95,8 @@ def SetAllNonLazyFields(message):
   if IsProto2(message):
     message.optional_import_enum = unittest_import_pb2.IMPORT_BAZ
 
-  message.optional_string_piece = '124'
-  message.optional_cord = '125'
+  message.optional_string_piece = u'124'
+  message.optional_cord = u'125'
 
   #
   # Repeated fields.
@@ -115,7 +115,7 @@ def SetAllNonLazyFields(message):
   message.repeated_float.append(211)
   message.repeated_double.append(212)
   message.repeated_bool.append(True)
-  message.repeated_string.append('215')
+  message.repeated_string.append(u'215')
   message.repeated_bytes.append(b'216')
 
   if IsProto2(message):
@@ -130,8 +130,8 @@ def SetAllNonLazyFields(message):
   if IsProto2(message):
     message.repeated_import_enum.append(unittest_import_pb2.IMPORT_BAR)
 
-  message.repeated_string_piece.append('224')
-  message.repeated_cord.append('225')
+  message.repeated_string_piece.append(u'224')
+  message.repeated_cord.append(u'225')
 
   # Add a second one of each field and set value by index.
   message.repeated_int32.append(0)
@@ -147,7 +147,7 @@ def SetAllNonLazyFields(message):
   message.repeated_float.append(0)
   message.repeated_double.append(0)
   message.repeated_bool.append(True)
-  message.repeated_string.append('0')
+  message.repeated_string.append(u'0')
   message.repeated_bytes.append(b'0')
   message.repeated_int32[1] = 301
   message.repeated_int64[1] = 302
@@ -162,7 +162,7 @@ def SetAllNonLazyFields(message):
   message.repeated_float[1] = 311
   message.repeated_double[1] = 312
   message.repeated_bool[1] = False
-  message.repeated_string[1] = '315'
+  message.repeated_string[1] = u'315'
   message.repeated_bytes[1] = b'316'
 
   if IsProto2(message):
@@ -178,8 +178,8 @@ def SetAllNonLazyFields(message):
   if IsProto2(message):
     message.repeated_import_enum.append(unittest_import_pb2.IMPORT_BAZ)
 
-  message.repeated_string_piece.append('324')
-  message.repeated_cord.append('325')
+  message.repeated_string_piece.append(u'324')
+  message.repeated_cord.append(u'325')
 
   #
   # Fields that have defaults.
@@ -248,7 +248,7 @@ def SetAllExtensions(message):
   extensions[pb2.optional_float_extension] = 111
   extensions[pb2.optional_double_extension] = 112
   extensions[pb2.optional_bool_extension] = True
-  extensions[pb2.optional_string_extension] = '115'
+  extensions[pb2.optional_string_extension] = u'115'
   extensions[pb2.optional_bytes_extension] = b'116'
 
   extensions[pb2.optionalgroup_extension].a = 117
@@ -263,8 +263,8 @@ def SetAllExtensions(message):
   extensions[pb2.optional_foreign_enum_extension] = pb2.FOREIGN_BAZ
   extensions[pb2.optional_import_enum_extension] = import_pb2.IMPORT_BAZ
 
-  extensions[pb2.optional_string_piece_extension] = '124'
-  extensions[pb2.optional_cord_extension] = '125'
+  extensions[pb2.optional_string_piece_extension] = u'124'
+  extensions[pb2.optional_cord_extension] = u'125'
 
   #
   # Repeated fields.
@@ -283,7 +283,7 @@ def SetAllExtensions(message):
   extensions[pb2.repeated_float_extension].append(211)
   extensions[pb2.repeated_double_extension].append(212)
   extensions[pb2.repeated_bool_extension].append(True)
-  extensions[pb2.repeated_string_extension].append('215')
+  extensions[pb2.repeated_string_extension].append(u'215')
   extensions[pb2.repeated_bytes_extension].append(b'216')
 
   extensions[pb2.repeatedgroup_extension].add().a = 217
@@ -296,8 +296,8 @@ def SetAllExtensions(message):
   extensions[pb2.repeated_foreign_enum_extension].append(pb2.FOREIGN_BAR)
   extensions[pb2.repeated_import_enum_extension].append(import_pb2.IMPORT_BAR)
 
-  extensions[pb2.repeated_string_piece_extension].append('224')
-  extensions[pb2.repeated_cord_extension].append('225')
+  extensions[pb2.repeated_string_piece_extension].append(u'224')
+  extensions[pb2.repeated_cord_extension].append(u'225')
 
   # Append a second one of each field.
   extensions[pb2.repeated_int32_extension].append(301)
@@ -313,7 +313,7 @@ def SetAllExtensions(message):
   extensions[pb2.repeated_float_extension].append(311)
   extensions[pb2.repeated_double_extension].append(312)
   extensions[pb2.repeated_bool_extension].append(False)
-  extensions[pb2.repeated_string_extension].append('315')
+  extensions[pb2.repeated_string_extension].append(u'315')
   extensions[pb2.repeated_bytes_extension].append(b'316')
 
   extensions[pb2.repeatedgroup_extension].add().a = 317
@@ -326,8 +326,8 @@ def SetAllExtensions(message):
   extensions[pb2.repeated_foreign_enum_extension].append(pb2.FOREIGN_BAZ)
   extensions[pb2.repeated_import_enum_extension].append(import_pb2.IMPORT_BAZ)
 
-  extensions[pb2.repeated_string_piece_extension].append('324')
-  extensions[pb2.repeated_cord_extension].append('325')
+  extensions[pb2.repeated_string_piece_extension].append(u'324')
+  extensions[pb2.repeated_cord_extension].append(u'325')
 
   #
   # Fields with defaults.
@@ -346,19 +346,19 @@ def SetAllExtensions(message):
   extensions[pb2.default_float_extension] = 411
   extensions[pb2.default_double_extension] = 412
   extensions[pb2.default_bool_extension] = False
-  extensions[pb2.default_string_extension] = '415'
+  extensions[pb2.default_string_extension] = u'415'
   extensions[pb2.default_bytes_extension] = b'416'
 
   extensions[pb2.default_nested_enum_extension] = pb2.TestAllTypes.FOO
   extensions[pb2.default_foreign_enum_extension] = pb2.FOREIGN_FOO
   extensions[pb2.default_import_enum_extension] = import_pb2.IMPORT_FOO
 
-  extensions[pb2.default_string_piece_extension] = '424'
+  extensions[pb2.default_string_piece_extension] = u'424'
   extensions[pb2.default_cord_extension] = '425'
 
   extensions[pb2.oneof_uint32_extension] = 601
   extensions[pb2.oneof_nested_message_extension].bb = 602
-  extensions[pb2.oneof_string_extension] = '603'
+  extensions[pb2.oneof_string_extension] = u'603'
   extensions[pb2.oneof_bytes_extension] = b'604'
 
 
@@ -742,7 +742,7 @@ class NonStandardInteger(numbers.Integral):
   def __long__(self):
     if self.error_string_on_conversion:
       raise RuntimeError(self.error_string_on_conversion)
-    return int(self.val)
+    return long(self.val)
 
   def __abs__(self):
     return NonStandardInteger(operator.abs(self.val))
@@ -847,7 +847,7 @@ class NonStandardInteger(numbers.Integral):
   def __bool__(self):
     return self.val
 
-  def __bool__(self):
+  def __nonzero__(self):
     return self.val
 
   def __ceil__(self):

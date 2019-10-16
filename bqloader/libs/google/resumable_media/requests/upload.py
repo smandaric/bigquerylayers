@@ -51,13 +51,17 @@ class SimpleUpload(_helpers.RequestsMixin, _upload.SimpleUpload):
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
         """
-        method, url, payload, headers = self._prepare_request(
-            data, content_type)
-        result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
-        self._process_response(result)
-        return result
+        method, url, payload, headers = self._prepare_request(data, content_type)
+        response = _helpers.http_request(
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
+        self._process_response(response)
+        return response
 
 
 class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
@@ -91,12 +95,18 @@ class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
             ~requests.Response: The HTTP response returned by ``transport``.
         """
         method, url, payload, headers = self._prepare_request(
-            data, metadata, content_type)
-        result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
-        self._process_response(result)
-        return result
+            data, metadata, content_type
+        )
+        response = _helpers.http_request(
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
+        self._process_response(response)
+        return response
 
 
 class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
@@ -282,8 +292,15 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
             :data:`.UPLOAD_CHUNK_SIZE`.
     """
 
-    def initiate(self, transport, stream, metadata, content_type,
-                 total_bytes=None, stream_final=True):
+    def initiate(
+        self,
+        transport,
+        stream,
+        metadata,
+        content_type,
+        total_bytes=None,
+        stream_final=True,
+    ):
         """Initiate a resumable upload.
 
         By default, this method assumes your ``stream`` is in a "final"
@@ -319,13 +336,22 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
             ~requests.Response: The HTTP response returned by ``transport``.
         """
         method, url, payload, headers = self._prepare_initiate_request(
-            stream, metadata, content_type,
-            total_bytes=total_bytes, stream_final=stream_final)
-        result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
-        self._process_initiate_response(result)
-        return result
+            stream,
+            metadata,
+            content_type,
+            total_bytes=total_bytes,
+            stream_final=stream_final,
+        )
+        response = _helpers.http_request(
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
+        self._process_initiate_response(response)
+        return response
 
     def transmit_next_chunk(self, transport):
         """Transmit the next chunk of the resource to be uploaded.
@@ -390,11 +416,16 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
                 code is not 200 or 308.
         """
         method, url, payload, headers = self._prepare_request()
-        result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
-        self._process_response(result, len(payload))
-        return result
+        response = _helpers.http_request(
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
+        self._process_response(response, len(payload))
+        return response
 
     def recover(self, transport):
         """Recover from a failure.
@@ -415,8 +446,13 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
         """
         method, url, payload, headers = self._prepare_recover_request()
         # NOTE: We assume "payload is None" but pass it along anyway.
-        result = _helpers.http_request(
-            transport, method, url, data=payload, headers=headers,
-            retry_strategy=self._retry_strategy)
-        self._process_recover_response(result)
-        return result
+        response = _helpers.http_request(
+            transport,
+            method,
+            url,
+            data=payload,
+            headers=headers,
+            retry_strategy=self._retry_strategy,
+        )
+        self._process_recover_response(response)
+        return response

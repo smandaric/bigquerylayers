@@ -145,7 +145,6 @@ be wrapped into a tuple:
 
 __author__ = 'tmarek@google.com (Torsten Marek)'
 
-import collections
 import functools
 import re
 import types
@@ -156,6 +155,13 @@ except ImportError:
 import uuid
 
 import six
+
+try:
+  # Since python 3
+  import collections.abc as collections_abc
+except ImportError:
+  # Won't work after python 3.8
+  import collections as collections_abc
 
 ADDR_RE = re.compile(r'\<([a-zA-Z0-9_\-\.]+) object at 0x[a-fA-F0-9]+\>')
 _SEPARATOR = uuid.uuid1().hex
@@ -174,14 +180,14 @@ def _StrClass(cls):
 
 
 def _NonStringIterable(obj):
-  return (isinstance(obj, collections.Iterable) and not
+  return (isinstance(obj, collections_abc.Iterable) and not
           isinstance(obj, six.string_types))
 
 
 def _FormatParameterList(testcase_params):
-  if isinstance(testcase_params, collections.Mapping):
+  if isinstance(testcase_params, collections_abc.Mapping):
     return ', '.join('%s=%s' % (argname, _CleanRepr(value))
-                     for argname, value in list(testcase_params.items()))
+                     for argname, value in testcase_params.items())
   elif _NonStringIterable(testcase_params):
     return ', '.join(map(_CleanRepr, testcase_params))
   else:
@@ -222,7 +228,7 @@ class _ParameterizedTestIter(object):
     def MakeBoundParamTest(testcase_params):
       @functools.wraps(test_method)
       def BoundParamTest(self):
-        if isinstance(testcase_params, collections.Mapping):
+        if isinstance(testcase_params, collections_abc.Mapping):
           test_method(self, **testcase_params)
         elif _NonStringIterable(testcase_params):
           test_method(self, *testcase_params)
@@ -263,9 +269,9 @@ def _ModifyClass(class_object, testcases, naming_type):
       'Cannot add parameters to %s,'
       ' which already has parameterized methods.' % (class_object,))
   class_object._id_suffix = id_suffix = {}
-  # We change the size of __dict__ while we iterate over it, 
+  # We change the size of __dict__ while we iterate over it,
   # which Python 3.x will complain about, so use copy().
-  for name, obj in list(class_object.__dict__.copy().items()):
+  for name, obj in class_object.__dict__.copy().items():
     if (name.startswith(unittest.TestLoader.testMethodPrefix)
         and isinstance(obj, types.FunctionType)):
       delattr(class_object, name)
@@ -273,7 +279,7 @@ def _ModifyClass(class_object, testcases, naming_type):
       _UpdateClassDictForParamTestCase(
           methods, id_suffix, name,
           _ParameterizedTestIter(obj, testcases, naming_type))
-      for name, meth in list(methods.items()):
+      for name, meth in methods.items():
         setattr(class_object, name, meth)
 
 
@@ -291,7 +297,7 @@ def _ParameterDecorator(naming_type, testcases):
     if isinstance(obj, type):
       _ModifyClass(
           obj,
-          list(testcases) if not isinstance(testcases, collections.Sequence)
+          list(testcases) if not isinstance(testcases, collections_abc.Sequence)
           else testcases,
           naming_type)
       return obj
@@ -353,7 +359,7 @@ class TestGeneratorMetaclass(type):
 
   def __new__(mcs, class_name, bases, dct):
     dct['_id_suffix'] = id_suffix = {}
-    for name, obj in list(dct.items()):
+    for name, obj in dct.items():
       if (name.startswith(unittest.TestLoader.testMethodPrefix) and
           _NonStringIterable(obj)):
         iterator = iter(obj)
@@ -385,8 +391,9 @@ def _UpdateClassDictForParamTestCase(dct, id_suffix, name, iterator):
     id_suffix[new_name] = getattr(func, '__x_extra_id__', '')
 
 
-class TestCase(unittest.TestCase, metaclass=TestGeneratorMetaclass):
+class TestCase(unittest.TestCase):
   """Base class for test cases using the parameters decorator."""
+  __metaclass__ = TestGeneratorMetaclass
 
   def _OriginalName(self):
     return self._testMethodName.split(_SEPARATOR)[0]

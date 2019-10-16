@@ -300,11 +300,21 @@ class GeneratorTest(unittest.TestCase):
     self.assertEqual(
         nested_names,
         set([field.name for field in desc.oneofs[0].fields]))
-    for field_name, field_desc in list(desc.fields_by_name.items()):
+    for field_name, field_desc in desc.fields_by_name.items():
       if field_name in nested_names:
         self.assertIs(desc.oneofs[0], field_desc.containing_oneof)
       else:
         self.assertIsNone(field_desc.containing_oneof)
+
+  def testEnumWithDupValue(self):
+    self.assertEqual('FOO1',
+                     unittest_pb2.TestEnumWithDupValue.Name(unittest_pb2.FOO1))
+    self.assertEqual('FOO1',
+                     unittest_pb2.TestEnumWithDupValue.Name(unittest_pb2.FOO2))
+    self.assertEqual('BAR1',
+                     unittest_pb2.TestEnumWithDupValue.Name(unittest_pb2.BAR1))
+    self.assertEqual('BAR1',
+                     unittest_pb2.TestEnumWithDupValue.Name(unittest_pb2.BAR2))
 
 
 class SymbolDatabaseRegistrationTest(unittest.TestCase):

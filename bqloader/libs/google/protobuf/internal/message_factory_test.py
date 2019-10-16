@@ -43,11 +43,13 @@ from google.protobuf import descriptor_pb2
 from google.protobuf.internal import api_implementation
 from google.protobuf.internal import factory_test1_pb2
 from google.protobuf.internal import factory_test2_pb2
+from google.protobuf.internal import testing_refleaks
 from google.protobuf import descriptor_database
 from google.protobuf import descriptor_pool
 from google.protobuf import message_factory
 
 
+@testing_refleaks.TestCase
 class MessageFactoryTest(unittest.TestCase):
 
   def setUp(self):
@@ -66,8 +68,8 @@ class MessageFactoryTest(unittest.TestCase):
     msg.factory_1_message.nested_factory_1_message.value = (
         'nested message value')
     msg.factory_1_message.scalar_value = 22
-    msg.factory_1_message.list_value.extend(['one', 'two', 'three'])
-    msg.factory_1_message.list_value.append('four')
+    msg.factory_1_message.list_value.extend([u'one', u'two', u'three'])
+    msg.factory_1_message.list_value.append(u'four')
     msg.factory_1_enum = 1
     msg.nested_factory_1_enum = 0
     msg.nested_factory_1_message.value = 'nested message value'
@@ -75,8 +77,8 @@ class MessageFactoryTest(unittest.TestCase):
     msg.circular_message.circular_message.mandatory = 2
     msg.circular_message.scalar_value = 'one deep'
     msg.scalar_value = 'zero deep'
-    msg.list_value.extend(['four', 'three', 'two'])
-    msg.list_value.append('one')
+    msg.list_value.extend([u'four', u'three', u'two'])
+    msg.list_value.append(u'one')
     msg.grouped.add()
     msg.grouped[0].part_1 = 'hello'
     msg.grouped[0].part_2 = 'world'
@@ -136,16 +138,15 @@ class MessageFactoryTest(unittest.TestCase):
           'google.protobuf.python.internal.Factory2Message.one_more_field')
       ext2 = msg1.Extensions._FindExtensionByName(
           'google.protobuf.python.internal.another_field')
+      self.assertEqual(0, len(msg1.Extensions))
       msg1.Extensions[ext1] = 'test1'
       msg1.Extensions[ext2] = 'test2'
       self.assertEqual('test1', msg1.Extensions[ext1])
       self.assertEqual('test2', msg1.Extensions[ext2])
       self.assertEqual(None,
                        msg1.Extensions._FindExtensionByNumber(12321))
+      self.assertEqual(2, len(msg1.Extensions))
       if api_implementation.Type() == 'cpp':
-        # TODO(jieluo): Fix len to return the correct value.
-        # self.assertEqual(2, len(msg1.Extensions))
-        self.assertEqual(len(msg1.Extensions), len(msg1.Extensions))
         self.assertRaises(TypeError,
                           msg1.Extensions._FindExtensionByName, 0)
         self.assertRaises(TypeError,

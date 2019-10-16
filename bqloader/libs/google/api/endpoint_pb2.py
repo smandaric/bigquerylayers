@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='google.api',
   syntax='proto3',
   serialized_options=_b('\n\016com.google.apiB\rEndpointProtoP\001ZEgoogle.golang.org/genproto/googleapis/api/serviceconfig;serviceconfig\242\002\004GAPI'),
-  serialized_pb=_b('\n\x19google/api/endpoint.proto\x12\ngoogle.api\x1a\x1cgoogle/api/annotations.proto\"_\n\x08\x45ndpoint\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0f\n\x07\x61liases\x18\x02 \x03(\t\x12\x10\n\x08\x66\x65\x61tures\x18\x04 \x03(\t\x12\x0e\n\x06target\x18\x65 \x01(\t\x12\x12\n\nallow_cors\x18\x05 \x01(\x08\x42o\n\x0e\x63om.google.apiB\rEndpointProtoP\x01ZEgoogle.golang.org/genproto/googleapis/api/serviceconfig;serviceconfig\xa2\x02\x04GAPIb\x06proto3')
+  serialized_pb=_b('\n\x19google/api/endpoint.proto\x12\ngoogle.api\x1a\x1cgoogle/api/annotations.proto\"c\n\x08\x45ndpoint\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x07\x61liases\x18\x02 \x03(\tB\x02\x18\x01\x12\x10\n\x08\x66\x65\x61tures\x18\x04 \x03(\t\x12\x0e\n\x06target\x18\x65 \x01(\t\x12\x12\n\nallow_cors\x18\x05 \x01(\x08\x42o\n\x0e\x63om.google.apiB\rEndpointProtoP\x01ZEgoogle.golang.org/genproto/googleapis/api/serviceconfig;serviceconfig\xa2\x02\x04GAPIb\x06proto3')
   ,
   dependencies=[google_dot_api_dot_annotations__pb2.DESCRIPTOR,])
 
@@ -47,7 +47,7 @@ _ENDPOINT = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
+      serialized_options=_b('\030\001'), file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='features', full_name='google.api.Endpoint.features', index=2,
       number=4, type=9, cpp_type=9, label=3,
@@ -82,7 +82,7 @@ _ENDPOINT = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=71,
-  serialized_end=166,
+  serialized_end=170,
 )
 
 DESCRIPTOR.message_types_by_name['Endpoint'] = _ENDPOINT
@@ -97,4 +97,5 @@ _sym_db.RegisterMessage(Endpoint)
 
 
 DESCRIPTOR._options = None
+_ENDPOINT.fields_by_name['aliases']._options = None
 # @@protoc_insertion_point(module_scope)

@@ -21,7 +21,56 @@ import copy
 
 import google.cloud._helpers
 from google.cloud.bigquery import _helpers
+from google.cloud.bigquery.model import ModelReference
+from google.cloud.bigquery.routine import RoutineReference
 from google.cloud.bigquery.table import TableReference
+
+
+def _get_table_reference(self, table_id):
+    """Constructs a TableReference.
+
+    Args:
+        table_id (str): The ID of the table.
+
+    Returns:
+        google.cloud.bigquery.table.TableReference:
+            A table reference for a table in this dataset.
+    """
+    return TableReference(self, table_id)
+
+
+def _get_model_reference(self, model_id):
+    """Constructs a ModelReference.
+
+    Args:
+        model_id (str): the ID of the model.
+
+    Returns:
+        google.cloud.bigquery.model.ModelReference:
+            A ModelReference for a model in this dataset.
+    """
+    return ModelReference.from_api_repr(
+        {"projectId": self.project, "datasetId": self.dataset_id, "modelId": model_id}
+    )
+
+
+def _get_routine_reference(self, routine_id):
+    """Constructs a RoutineReference.
+
+    Args:
+        routine_id (str): the ID of the routine.
+
+    Returns:
+        google.cloud.bigquery.routine.RoutineReference:
+            A RoutineReference for a routine in this dataset.
+    """
+    return RoutineReference.from_api_repr(
+        {
+            "projectId": self.project,
+            "datasetId": self.dataset_id,
+            "routineId": routine_id,
+        }
+    )
 
 
 class AccessEntry(object):
@@ -191,17 +240,11 @@ class DatasetReference(object):
         """str: URL path for the dataset based on project and dataset ID."""
         return "/projects/%s/datasets/%s" % (self.project, self.dataset_id)
 
-    def table(self, table_id):
-        """Constructs a TableReference.
+    table = _get_table_reference
 
-        Args:
-            table_id (str): The ID of the table.
+    model = _get_model_reference
 
-        Returns:
-            google.cloud.bigquery.table.TableReference:
-                A table reference for a table in this dataset.
-        """
-        return TableReference(self, table_id)
+    routine = _get_routine_reference
 
     @classmethod
     def from_api_repr(cls, resource):
@@ -226,7 +269,7 @@ class DatasetReference(object):
         Args:
             dataset_id (str):
                 A dataset ID in standard SQL format. If ``default_project``
-                is not specified, this must included both the project ID and
+                is not specified, this must include both the project ID and
                 the dataset ID, separated by ``.``.
             default_project (str):
                 Optional. The project ID to use when ``dataset_id`` does not
@@ -247,13 +290,13 @@ class DatasetReference(object):
         """
         output_dataset_id = dataset_id
         output_project_id = default_project
-        parts = dataset_id.split(".")
+        parts = _helpers._split_id(dataset_id)
 
         if len(parts) == 1 and not default_project:
             raise ValueError(
                 "When default_project is not set, dataset_id must be a "
-                "fully-qualified dataset ID in standard SQL format. "
-                'e.g. "project.dataset_id", got {}'.format(dataset_id)
+                "fully-qualified dataset ID in standard SQL format, "
+                'e.g., "project.dataset_id" got {}'.format(dataset_id)
             )
         elif len(parts) == 2:
             output_project_id, output_dataset_id = parts
@@ -306,8 +349,13 @@ class Dataset(object):
     https://cloud.google.com/bigquery/docs/reference/rest/v2/datasets
 
     Args:
-        dataset_ref (google.cloud.bigquery.dataset.DatasetReference):
-            a pointer to a dataset
+        dataset_ref (Union[ \
+            :class:`~google.cloud.bigquery.dataset.DatasetReference`, \
+            str, \
+        ]):
+            A pointer to a dataset. If ``dataset_ref`` is a string, it must
+            include both the project ID and the dataset ID, separated by
+            ``.``.
     """
 
     _PROPERTY_TO_API_FIELD = {
@@ -318,6 +366,8 @@ class Dataset(object):
     }
 
     def __init__(self, dataset_ref):
+        if isinstance(dataset_ref, six.string_types):
+            dataset_ref = DatasetReference.from_string(dataset_ref)
         self._properties = {"datasetReference": dataset_ref.to_api_repr(), "labels": {}}
 
     @property
@@ -504,7 +554,7 @@ class Dataset(object):
         Args:
             full_dataset_id (str):
                 A fully-qualified dataset ID in standard SQL format. Must
-                included both the project ID and the dataset ID, separated by
+                include both the project ID and the dataset ID, separated by
                 ``.``.
 
         Returns:
@@ -557,31 +607,13 @@ class Dataset(object):
 
     def _build_resource(self, filter_fields):
         """Generate a resource for ``update``."""
-        partial = {}
-        for filter_field in filter_fields:
-            api_field = self._PROPERTY_TO_API_FIELD.get(filter_field)
-            if api_field is None and filter_field not in self._properties:
-                raise ValueError("No Dataset property %s" % filter_field)
-            elif api_field is not None:
-                partial[api_field] = self._properties.get(api_field)
-            else:
-                # allows properties that are not defined in the library
-                # and properties that have the same name as API resource key
-                partial[filter_field] = self._properties[filter_field]
+        return _helpers._build_resource_from_properties(self, filter_fields)
 
-        return partial
+    table = _get_table_reference
 
-    def table(self, table_id):
-        """Constructs a TableReference.
+    model = _get_model_reference
 
-        Args:
-            table_id (str): the ID of the table.
-
-        Returns:
-            google.cloud.bigquery.table.TableReference:
-                A TableReference for a table in this dataset.
-        """
-        return TableReference(self.reference, table_id)
+    routine = _get_routine_reference
 
     def __repr__(self):
         return "Dataset({})".format(repr(self.reference))
@@ -661,14 +693,8 @@ class DatasetListItem(object):
         """
         return DatasetReference(self.project, self.dataset_id)
 
-    def table(self, table_id):
-        """Constructs a TableReference.
+    table = _get_table_reference
 
-        Args:
-            table_id (str): the ID of the table.
+    model = _get_model_reference
 
-        Returns:
-            google.cloud.bigquery.table.TableReference:
-                A TableReference for a table in this dataset.
-        """
-        return TableReference(self.reference, table_id)
+    routine = _get_routine_reference

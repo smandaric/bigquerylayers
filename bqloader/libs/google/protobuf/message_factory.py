@@ -39,9 +39,18 @@ my_proto_instance = message_classes['some.proto.package.MessageName']()
 
 __author__ = 'matthewtoia@google.com (Matt Toia)'
 
+from google.protobuf.internal import api_implementation
 from google.protobuf import descriptor_pool
 from google.protobuf import message
-from google.protobuf import reflection
+
+if api_implementation.Type() == 'cpp':
+  from google.protobuf.pyext import cpp_message as message_impl
+else:
+  from google.protobuf.internal import python_message as message_impl
+
+
+# The type of all Message classes.
+_GENERATED_PROTOCOL_MESSAGE_TYPE = message_impl.GeneratedProtocolMessageType
 
 
 class MessageFactory(object):
@@ -70,11 +79,11 @@ class MessageFactory(object):
       descriptor_name = descriptor.name
       if str is bytes:  # PY2
         descriptor_name = descriptor.name.encode('ascii', 'ignore')
-      result_class = reflection.GeneratedProtocolMessageType(
+      result_class = _GENERATED_PROTOCOL_MESSAGE_TYPE(
           descriptor_name,
           (message.Message,),
           {'DESCRIPTOR': descriptor, '__module__': None})
-          # If module not set, it wrongly points to the reflection.py module.
+      # If module not set, it wrongly points to message_factory module.
       self._classes[descriptor] = result_class
       for field in descriptor.fields:
         if field.message_type:
@@ -103,7 +112,7 @@ class MessageFactory(object):
     result = {}
     for file_name in files:
       file_desc = self.pool.FindFileByName(file_name)
-      for desc in list(file_desc.message_types_by_name.values()):
+      for desc in file_desc.message_types_by_name.values():
         result[desc.full_name] = self.GetPrototype(desc)
 
       # While the extension FieldDescriptors are created by the descriptor pool,
@@ -115,7 +124,7 @@ class MessageFactory(object):
       # ignore the registration if the original was the same, or raise
       # an error if they were different.
 
-      for extension in list(file_desc.extensions_by_name.values()):
+      for extension in file_desc.extensions_by_name.values():
         if extension.containing_type not in self._classes:
           self.GetPrototype(extension.containing_type)
         extended_class = self._classes[extension.containing_type]
