@@ -37,7 +37,7 @@ import tempfile, csv
 
 from .bqloader.bqloader import BigQueryConnector
 
-from .background_tasks import TestTask, BackgroundQueryTask, RetrieveQueryResultTask
+from .background_tasks import TestTask, BackgroundQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage
 
 import time
 from qgis.PyQt.QtWidgets import QProgressBar
@@ -73,6 +73,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         #self.base_query_result = Queue()
         self.result_queue = Queue()
         self.file_queue = Queue()
+        self.converted_file_queue = Queue()
 
         # Elements associated with base query
         self.base_query_elements = [self.project_edit, self.query_edit, self.run_query_button]
@@ -305,6 +306,8 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         base_query_job = self.base_query_job.get()
         self.base_query_job.put(base_query_job)
 
+        geom_column = self.geometry_column_combo_box.currentText()
+
         for elm in self.base_query_elements + self.layer_import_elements:
             elm.setEnabled(False)
         
@@ -312,9 +315,22 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
             self.add_all_button.setText('Adding layer...')
 
+            self.parent_task = LayerImportTask('Parent import task', self.iface)
+
             # TASK 1: DOWNLOAD
             self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, base_query_job, self.file_queue)
-            QgsApplication.taskManager().addTask(self.download_task)
+
+            # TASK 2: Convert
+            self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
+
+            
+            self.parent_task.addSubTask(self.download_task, [], QgsTask.ParentDependsOnSubTask)
+            self.parent_task.addSubTask(self.convert_task, [self.download_task], QgsTask.ParentDependsOnSubTask)
+            
+
+            QgsApplication.taskManager().addTask(self.parent_task)
+            #QgsApplication.taskManager().addTask(self.convert_task)
+
 
 
             #task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)

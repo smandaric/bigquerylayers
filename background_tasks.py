@@ -1,5 +1,5 @@
 from qgis.core import QgsTask, QgsMessageLog, Qgis
-import time, csv, tempfile
+import time, csv, tempfile, subprocess, shutil
 
 class TestTask(QgsTask):
     """Here we subclass QgsTask"""
@@ -108,6 +108,8 @@ class RetrieveQueryResultTask(QgsTask):
         via signals"""
         try:
             QgsMessageLog.logMessage('In write tempfile task', 'BigQuery Layers', Qgis.Info)
+            #query_job  = self.query_job.get()
+            #self.query_job.put(query_job)
             query_result = self.query_job.result()
             schema_fields =  [field.name for field in query_result.schema]
             total_rows = query_result.total_rows
@@ -126,6 +128,8 @@ class RetrieveQueryResultTask(QgsTask):
                     if new_progress_percent > progress_percent:
                         progress_percent = new_progress_percent
                         self.setProgress(progress_percent)
+                        if self.isCanceled():
+                            return False
 
                     writer.writerow(dict(row.items()))
             self.file_queue.put(filepath)
@@ -144,49 +148,90 @@ class RetrieveQueryResultTask(QgsTask):
         if result is False:
             self.iface.messageBar().pushMessage('Task was cancelled')
         elif result is True and self.exception:
-            QgsMessageLog.logMessage(self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            QgsMessageLog.logMessage('Result retrival: '+self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
         else:
             QgsMessageLog.logMessage('Finished import', 'BigQuery Layers', Qgis.Info)
             
 
+class ConvertToGeopackage(QgsTask):
+    """Here we subclass QgsTask"""
+    def __init__(self, desc, iface, geometry_column, input_file_queue, output_file_queue):
+        QgsTask.__init__(self, desc)
+        self.iface = iface
+        self.geometry_column = geometry_column
+        self.input_file_queue = input_file_queue
+        self.output_file_queue = output_file_queue
+        self.exception = None
 
 
-
-
-
-
-
-
-
-
-
-    def csv_to_spatiallite(self):
-        ogr2ogr_executable = shutil.which('ogr2ogr')
-        geom_field = self.geometry_column_combo_box.currentText()
-
-        if not ogr2ogr_executable:
-            QgsMessageLog.logMessage('ogr2ogr executable not found', 'BigQuery Layers', Qgis.Info)
-            return
-
-        cp_params = [
-            'cp',
-            self.layer_file_path,
-            self.layer_file_path + '.csv'
-        ]
-
-        ogr2ogr_params = [
-            ogr2ogr_executable,
-            '-f', 'GPKG', '{}.gpkg'.format(self.layer_file_path),
-            self.layer_file_path + '.csv',
-            '-oo', 'HEADERS=YES',
-            '-oo', 'GEOM_POSSIBLE_NAMES={}'.format(geom_field),
-            '-a_srs', 'EPSG:4326'
-        ]
-
+    def run(self):
+        """This function is where you do the 'heavy lifting' or implement
+        the task which you want to run in a background thread. This function 
+        must return True or False and should only interact with the main thread
+        via signals"""
         try:
+            QgsMessageLog.logMessage('Running conversion', 'BigQuery Layers', Qgis.Info)
+            input_file_path = self.input_file_queue.get()
+            self.input_file_queue.put(input_file_path)
+
+            temp_file_path = input_file_path + '.csv'
+
+            output_file_path = input_file_path + '.gpkg'
+            
+
+            ogr2ogr_executable = shutil.which('ogr2ogr')
+
+            if not ogr2ogr_executable:
+                QgsMessageLog.logMessage('ogr2ogr executable not found', 'BigQuery Layers', Qgis.Info)
+                return False
+
+            cp_params = [
+                'cp',
+                input_file_path,
+                temp_file_path
+            ]
+
+            ogr2ogr_params = [
+                ogr2ogr_executable,
+                '-f', 'GPKG', output_file_path,
+                temp_file_path,
+                '-oo', 'HEADERS=YES',
+                '-oo', 'GEOM_POSSIBLE_NAMES={}'.format(self.geometry_column),
+                '-a_srs', 'EPSG:4326'
+            ]
+
             subprocess.check_output(cp_params)
             subprocess.check_output(ogr2ogr_params)
-        except Exception as e:
-            print(e)
 
-        return self.layer_file_path + ".gpkg"
+            self.output_file_queue.put(output_file_path)
+            return True
+        except Exception as e:
+            self.exception = e
+            return True
+
+    def finished(self, result):
+        """This function is called automatically when the task is completed and is
+        called from the main thread so it is safe to interact with the GUI etc here"""
+        QgsMessageLog.logMessage('Finished is called', 'BigQuery Layers', Qgis.Info)
+        
+        if result is False:
+            self.iface.messageBar().pushMessage('Task was cancelled')
+        elif result is True and self.exception:
+            QgsMessageLog.logMessage('Error in conversion: ' + self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            super().cancel()
+        else:
+            QgsMessageLog.logMessage('Finished Conversion', 'BigQuery Layers', Qgis.Info)
+
+
+class LayerImportTask(QgsTask):
+    def __init__(self, desc, iface):
+        QgsTask.__init__(self, desc)
+        self.iface = iface
+        self.exception = None
+
+    def run(self):
+        return True
+
+    def finished(self, result):
+        QgsMessageLog.logMessage('LayerImportTask has finished', 'BigQuery Layers', Qgis.Info)
+
