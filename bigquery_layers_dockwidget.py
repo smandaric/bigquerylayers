@@ -37,7 +37,7 @@ import tempfile, csv
 
 from .bqloader.bqloader import BigQueryConnector
 
-from .background_tasks import TestTask, BackgroundQueryTask
+from .background_tasks import TestTask, BackgroundQueryTask, RetrieveQueryResultTask
 
 import time
 from qgis.PyQt.QtWidgets import QProgressBar
@@ -69,7 +69,8 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.iface = iface
 
         self.client = None
-        self.base_query_result = Queue()
+        self.base_query_job = Queue()
+        #self.base_query_result = Queue()
         self.result_queue = Queue()
         self.file_queue = Queue()
 
@@ -151,7 +152,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.iface,
             self.client,
             query,
-            self.base_query_result,
+            self.base_query_job,
             self.query_progress_field,
             self.geometry_column_combo_box,
             self.base_query_elements,
@@ -298,6 +299,41 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         #QgsApplication.taskManager().addTask(task)
         #QgsMessageLog.logMessage('asdasd', 'BigQuery Layers', Qgis.Info)
     
+    def add_layer_button_handler(self):
+        geom_field = self.geometry_column_combo_box.currentText()
+
+        base_query_job = self.base_query_job.get()
+        self.base_query_job.put(base_query_job)
+
+        for elm in self.base_query_elements + self.layer_import_elements:
+            elm.setEnabled(False)
+        
+        if self.sender().objectName() == 'add_all_button':
+            QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
+            self.add_all_button.setText('Adding layer...')
+
+            # TASK 1: DOWNLOAD
+            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, base_query_job, self.file_queue)
+            QgsApplication.taskManager().addTask(self.download_task)
+
+
+            #task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)
+        elif self.sender().objectName() == 'add_extents_button':
+            self.add_extents_button.setText('Adding layer...')
+            QgsMessageLog.logMessage('Add layer', 'BigQuery Layers', Qgis.Info)
+            extent = self.iface.mapCanvas().extent()
+
+            # Reproject extents if project CRS is not EPSG:4326
+            project_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
+            
+            if project_crs != QgsCoordinateReferenceSystem(4326):
+                crcTarget = QgsCoordinateReferenceSystem(4326)
+                transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
+                extent = transform.transform(extent)
+
+            task = QgsTask.fromFunction('Add layer', self.add_extents, on_finished=self.layer_added,
+                                        uri=uri, extent_wkt=extent.asWktPolygon(), geom_field=geom_field)
+
 
     def add_layer_button_handler_old2(self):
         if self.sender().objectName() == 'add_all_button':
