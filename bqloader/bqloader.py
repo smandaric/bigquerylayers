@@ -85,6 +85,7 @@ class BigQueryConnector:
     @staticmethod
     def write_to_tempfile(query_job):
         schema_fields = BigQueryConnector.query_fields(query_job)
+        
 
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as fp:
             filepath = fp.name
