@@ -30,6 +30,10 @@ from PyQt5.QtCore import pyqtSignal
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsMessageLog, Qgis, QgsTask, QgsApplication, QgsDataSourceUri
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSlot
 
+from google.cloud import bigquery
+
+import tempfile, csv
+
 from .bqloader.bqloader import BigQueryConnector
 
 class EverythingIsFineException(Exception):
@@ -171,7 +175,64 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         raise EverythingIsFineException()
 
+    def run_bigquery(self, task, q):
+        QgsMessageLog.logMessage('IN run_bigquert', 'BigQuery Layers', Qgis.Info)
+        client = bigquery.Client('uc-shoppertrak-poc')
+        query_job = client.query(q)
+        QgsMessageLog.logMessage('Running query', 'BigQuery Layers', Qgis.Info)
+        QgsMessageLog.logMessage(q, 'BigQuery Layers', Qgis.Info)
+        query_result = query_job.result()
+        print("got result")
+        self.test_query_result = query_result
+
+        raise EverythingIsFineException()
+
+    def write_to_tempfile(self, task):
+        QgsMessageLog.logMessage('In write tempfiel task', 'BigQuery Layers', Qgis.Info)
+        query_result = self.test_query_result
+        schema_fields =  [field.name for field in query_result.schema]
+        total_rows = query_result.total_rows
+        QgsMessageLog.logMessage('Total rows: '+str(total_rows), 'BigQuery Layers', Qgis.Info)
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as fp:
+            filepath = fp.name
+            writer = csv.DictWriter(fp, fieldnames=schema_fields)
+            writer.writeheader()
+            progress_percent = 0
+            QgsMessageLog.logMessage('File path: '+filepath, 'BigQuery Layers', Qgis.Info)
+            #self.progressBar.reset()
+            #self.progressBar.setValue(progress_percent)
+
+            for i, row in enumerate(query_result, 1):
+                
+                new_progress_percent = int(100 * (i / total_rows))
+                if new_progress_percent > progress_percent:
+                    progress_percent = new_progress_percent
+                    #self.progressBar.setValue(progress_percent)
+                    QgsMessageLog.logMessage(str(progress_percent), 'BigQuery Layers', Qgis.Info)
+
+                writer.writerow(dict(row.items()))
+            self.last_filepath = filepath
+        
+        raise EverythingIsFineException()
+
+    def write_task_starter(self, exception, result=None):
+        QgsMessageLog.logMessage('In write task starter', 'BigQuery Layers', Qgis.Info)
+        task = QgsTask.fromFunction('Download file', self.write_to_tempfile, on_finished=None)
+        QgsApplication.taskManager().addTask(task)
+        QgsMessageLog.logMessage('asdasd', 'BigQuery Layers', Qgis.Info)
+
     def add_layer_button_handler(self):
+        if self.sender().objectName() == 'add_all_button':
+            QgsMessageLog.logMessage('New layer button handler', 'BigQuery Layers', Qgis.Info)
+            self.add_all_button.setText('Adding layer...')
+            print(self.query_edit.toPlainText())
+            task = QgsTask.fromFunction('Run query', self.run_bigquery, on_finished=self.write_task_starter, q=self.query_edit.toPlainText())
+            self.add_all_button.setText('Add layer')
+            QgsApplication.taskManager().addTask(task)
+            QgsMessageLog.logMessage('Below started task', 'BigQuery Layers', Qgis.Info)
+
+
+    def add_layer_button_handler_old(self):
         assert self.base_query_complete
 
         geom_field = self.geometry_column_combo_box.currentText()
