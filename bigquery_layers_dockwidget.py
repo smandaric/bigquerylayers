@@ -36,6 +36,10 @@ import tempfile, csv
 
 from .bqloader.bqloader import BigQueryConnector
 
+import time
+from qgis.PyQt.QtWidgets import QProgressBar
+from qgis.PyQt.QtCore import *
+
 class EverythingIsFineException(Exception):
     pass
 
@@ -187,7 +191,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         raise EverythingIsFineException()
 
-    def write_to_tempfile(self, task):
+    def write_to_tempfile(self, task, progress):
         QgsMessageLog.logMessage('In write tempfiel task', 'BigQuery Layers', Qgis.Info)
         query_result = self.test_query_result
         schema_fields =  [field.name for field in query_result.schema]
@@ -198,6 +202,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             writer = csv.DictWriter(fp, fieldnames=schema_fields)
             writer.writeheader()
             progress_percent = 0
+            progress.setValue(progress_percent)
             QgsMessageLog.logMessage('File path: '+filepath, 'BigQuery Layers', Qgis.Info)
             #self.progressBar.reset()
             #self.progressBar.setValue(progress_percent)
@@ -207,6 +212,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 new_progress_percent = int(100 * (i / total_rows))
                 if new_progress_percent > progress_percent:
                     progress_percent = new_progress_percent
+                    progress.setValue(progress_percent)
                     #self.progressBar.setValue(progress_percent)
                     QgsMessageLog.logMessage(str(progress_percent), 'BigQuery Layers', Qgis.Info)
 
@@ -217,7 +223,16 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def write_task_starter(self, exception, result=None):
         QgsMessageLog.logMessage('In write task starter', 'BigQuery Layers', Qgis.Info)
-        task = QgsTask.fromFunction('Download file', self.write_to_tempfile, on_finished=None)
+        
+
+        progressMessageBar = self.iface.messageBar().createMessage("Doing something boring...")
+        progress = QProgressBar()
+        progress.setMaximum(100)
+        progress.setAlignment(Qt.AlignLeft|Qt.AlignVCenter)
+        progressMessageBar.layout().addWidget(progress)
+        self.iface.messageBar().pushWidget(progressMessageBar, Qgis.Info)
+
+        task = QgsTask.fromFunction('Download file', self.write_to_tempfile, on_finished=None, progress=progress)
         QgsApplication.taskManager().addTask(task)
         QgsMessageLog.logMessage('asdasd', 'BigQuery Layers', Qgis.Info)
 
