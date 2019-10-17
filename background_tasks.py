@@ -224,14 +224,37 @@ class ConvertToGeopackage(QgsTask):
 
 
 class LayerImportTask(QgsTask):
-    def __init__(self, desc, iface):
+    def __init__(self, desc, iface, layer_file_path, add_all_button, add_extents_button, base_query_elements, layer_import_elements):
         QgsTask.__init__(self, desc)
         self.iface = iface
+        self.layer_file_path = layer_file_path
         self.exception = None
+        self.add_all_button = add_all_button
+        self.add_extents_button = add_extents_button
+        self.base_query_elements = base_query_elements
+        self.layer_import_elements = layer_import_elements
 
     def run(self):
         return True
 
     def finished(self, result):
         QgsMessageLog.logMessage('LayerImportTask has finished', 'BigQuery Layers', Qgis.Info)
+        if result is True and not self.exception:
+            gpkg_layer_name = self.layer_file_path.get()
+            try:
+                gpkg_layer = gpkg_layer_name + '|layername=' + gpkg_layer_name.split('/')[-1].split('.')[0]
+                display_name = 'BigQuery layer'
+                vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
+            
+                if vlayer:
+                    #elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
+                    self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(2), 
+                        level=Qgis.Info)
+            except Exception as e:
+                print(e)
+
+        self.add_all_button.setText('Add all')
+        self.add_extents_button.setText('Add window extents')
+        for elm in self.base_query_elements + self.layer_import_elements:
+            elm.setEnabled(True)
 
