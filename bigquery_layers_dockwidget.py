@@ -22,12 +22,12 @@
  ***************************************************************************/
 """
 
-import os
+import os, shutil, subprocess, sys
 
 from PyQt5 import QtGui, QtWidgets, uic
 from PyQt5.QtCore import pyqtSignal
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsMessageLog, Qgis, QgsTask, QgsApplication
+from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsMessageLog, Qgis, QgsTask, QgsApplication, QgsDataSourceUri
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSlot
 
 from .bqloader.bqloader import BigQueryConnector
@@ -157,6 +157,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsMessageLog.logMessage('Running add full layer', 'BigQuery Layers', Qgis.Info)
 
         layer_file = self.bq.write_base_result()
+        self.layer_file_path = layer_file
         self.layer_uri = uri.format(file=layer_file)
 
         raise EverythingIsFineException()
@@ -165,6 +166,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsMessageLog.logMessage('Running add extent layer', 'BigQuery Layers', Qgis.Info)
 
         layer_file = self.bq.write_extent_result(extent_wkt, geom_field)
+        self.layer_file_path = layer_file
         self.layer_uri = uri.format(file=layer_file)
 
         raise EverythingIsFineException()
@@ -215,9 +217,25 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             QgsMessageLog.logMessage('Layer added', 'BigQuery Layers', Qgis.Info)
             if isinstance(exception, EverythingIsFineException):
+                #ogr2ogr stuff - move to background process?
+                gpkg_layer_name = self.csv_to_spatiallite()
+
                 # Must be done in main thread
                 try:
-                    vlayer = self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
+                    if gpkg_layer_name:
+                        """
+                        /Users/sm/tmp_spatial/tmprz9ht939.sqlite|layername=tmprz9ht939
+                        """
+
+                        gpkg_layer = gpkg_layer_name + '|layername=' + gpkg_layer_name.split('/')[-1].split('.')[0]
+
+                        print(gpkg_layer)
+
+
+                        display_name = 'Bigquery layer - sqlite'
+                        vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
+                    else:
+                        vlayer = self.iface.addVectorLayer(self.layer_uri, "Bigquery layer", "delimitedtext")
                     if vlayer:
                         elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
                         self.iface.messageBar().pushMessage("BigQuery Layers", "Added {} elements".format(elements_added), 
@@ -232,5 +250,65 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.add_extents_button.setText('Add window extents')
             for elm in self.base_query_elements + self.layer_import_elements:
                 elm.setEnabled(True)
+
+    def csv_to_spatiallite(self):
+        """
+        ogr2ogr \
+        -f SQLite csvfile.sqlite \
+        csvfile.csv \
+        -oo GEOM_POSSIBLE_NAMES=poi_geog \
+        -a_srs 'EPSG:4326' \
+        -oo HEADERS=YES \
+        -dsco SPATIALITE=YES
+        """
+
+        """
+        /usr/local/opt/osgeo-gdal/bin/ogr2ogr 
+        -f GPKG file.gpkg  
+        /var/folders/tt/vwhgjvbj1mdg2w3qs39csvmc0000gn/T/tmppzf4kh1d.csv 
+        -oo HEADERS=YES 
+        -oo GEOM_POSSIBLE_NAMES=poi_geog 
+        -a_srs EPSG:4326
+
+
+        """
+        ogr2ogr_executable = shutil.which('ogr2ogr')
+        geom_field = self.geometry_column_combo_box.currentText()
+
+        print(self.layer_file_path)
+
+        if not ogr2ogr_executable:
+            QgsMessageLog.logMessage('ogr2ogr executable not found', 'BigQuery Layers', Qgis.Info)
+            return
+
+        cp_params = [
+            'cp',
+            self.layer_file_path,
+            self.layer_file_path + '.csv'
+        ]
+
+        ogr2ogr_params = [
+            ogr2ogr_executable,
+            '-f', 'GPKG', '{}.gpkg'.format(self.layer_file_path),
+            self.layer_file_path + '.csv',
+            '-oo', 'HEADERS=YES',
+            '-oo', 'GEOM_POSSIBLE_NAMES={}'.format(geom_field),
+            '-a_srs', 'EPSG:4326'
+        ]
+
+        print(" ".join(ogr2ogr_params))
+
+        try:
+            print("running rename")
+            subprocess.check_output(cp_params)
+            print("running ogr")
+            subprocess.check_output(ogr2ogr_params)
+            print("done with transform")
+        except Exception as e:
+            print(e)
+
+        return self.layer_file_path + ".gpkg"
+
+
 
 
