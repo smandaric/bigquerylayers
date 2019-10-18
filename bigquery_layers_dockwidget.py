@@ -140,7 +140,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
             self.add_all_button.setText('Adding layer...')
 
-            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
+            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
 
             # TASK 1: DOWNLOAD
             self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue, elements_in_layer, upstream_taks_canceled)
@@ -166,7 +166,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
                 extent = transform.transform(extent)
 
-            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
+            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
 
             # TASK 1: Extents query
             self.extents_query_task = ExtentsQueryTask('Select window extents', self.iface, self.client,
