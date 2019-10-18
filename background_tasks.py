@@ -93,12 +93,13 @@ class BaseQueryTask(QgsTask):
 
 class RetrieveQueryResultTask(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, query_job, file_queue):
+    def __init__(self, desc, iface, query_job, file_queue, elements_in_layer):
         QgsTask.__init__(self, desc)
         self.iface = iface
         self.query_job = query_job
         self.file_queue = file_queue
         self.exception = False
+        self.elements_in_layer = elements_in_layer
 
 
     def run(self):
@@ -115,6 +116,7 @@ class RetrieveQueryResultTask(QgsTask):
             query_result = query_job.result()
             schema_fields =  [field.name for field in query_result.schema]
             total_rows = query_result.total_rows
+            self.elements_in_layer.put(total_rows)
             QgsMessageLog.logMessage('Total rows: '+str(total_rows), 'BigQuery Layers', Qgis.Info)
 
             with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as fp:
@@ -226,7 +228,7 @@ class ConvertToGeopackage(QgsTask):
 
 
 class LayerImportTask(QgsTask):
-    def __init__(self, desc, iface, layer_file_path, add_all_button, add_extents_button, base_query_elements, layer_import_elements):
+    def __init__(self, desc, iface, layer_file_path, add_all_button, add_extents_button, base_query_elements, layer_import_elements, elements_in_layer):
         QgsTask.__init__(self, desc)
         self.iface = iface
         self.layer_file_path = layer_file_path
@@ -235,6 +237,7 @@ class LayerImportTask(QgsTask):
         self.add_extents_button = add_extents_button
         self.base_query_elements = base_query_elements
         self.layer_import_elements = layer_import_elements
+        self.elements_in_layer = elements_in_layer
 
     def run(self):
         return True
@@ -250,7 +253,8 @@ class LayerImportTask(QgsTask):
             
                 if vlayer:
                     #elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
-                    self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(2), 
+                    elements_in_layer = self.elements_in_layer.get()
+                    self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
                         level=Qgis.Info)
             except Exception as e:
                 print(e)

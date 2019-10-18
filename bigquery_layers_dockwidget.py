@@ -306,6 +306,8 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         geom_column = self.geometry_column_combo_box.currentText()
 
+        elements_in_layer = Queue()
+
         for elm in self.base_query_elements + self.layer_import_elements:
             elm.setEnabled(False)
         
@@ -313,12 +315,12 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
             self.add_all_button.setText('Adding layer...')
 
-            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements)
+            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer)
 
 
 
             # TASK 1: DOWNLOAD
-            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue)
+            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue, elements_in_layer)
 
             # TASK 2: Convert
             self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
@@ -347,14 +349,14 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
                 extent = transform.transform(extent)
 
-            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements)
+            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer)
 
             # TASK 1: Extents query
             self.extents_query_task = ExtentsQueryTask('Select window extents', self.iface, self.client,
             self.base_query_job, self.extent_query_job, extent.asWktPolygon(), geom_column)
 
             # TASK 2: Retrive - from extent querty
-            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.extent_query_job, self.file_queue)
+            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.extent_query_job, self.file_queue, elements_in_layer)
 
             # TASK 3: Convert
             self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
