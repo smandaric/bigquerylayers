@@ -1,36 +1,8 @@
+import csv
+import tempfile
+import subprocess
+import shutil
 from qgis.core import QgsTask, QgsMessageLog, Qgis
-import time, csv, tempfile, subprocess, shutil
-
-class TestTask(QgsTask):
-    """Here we subclass QgsTask"""
-    def __init__(self, desc, iface):
-        QgsTask.__init__(self, desc)
-        self.iface = iface
-
-    def run(self):
-        """This function is where you do the 'heavy lifting' or implement
-        the task which you want to run in a background thread. This function 
-        must return True or False and should only interact with the main thread
-        via signals"""
-        for i in range (21):
-            time.sleep(0.5)
-            val = i * 5
-            #report progress which can be received by the main thread
-            self.setProgress(val)
-            #check to see if the task has been cancelled
-            if self.isCanceled():
-                return False
-        return True
-
-    def finished(self, result):
-        """This function is called automatically when the task is completed and is
-        called from the main thread so it is safe to interact with the GUI etc here"""
-        self.iface.messageBar().clearWidgets()
-        
-        if result is False:
-            self.iface.messageBar().pushMessage('Task was cancelled')
-        else:
-            self.iface.messageBar().pushMessage('Task Complete')
 
 
 class BaseQueryTask(QgsTask):

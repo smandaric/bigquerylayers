@@ -37,7 +37,7 @@ import tempfile, csv
 
 from .bqloader.bqloader import BigQueryConnector
 
-from .background_tasks import TestTask, BaseQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage, ExtentsQueryTask
+from .background_tasks import BaseQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage, ExtentsQueryTask
 
 import time
 from qgis.PyQt.QtWidgets import QProgressBar
@@ -96,17 +96,6 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.base_query_complete = False
 
-    def run_background_query(self, project_name, query):
-        if not self.client:
-            self.client = bigquery.Client(project_name)
-
-        result = Queue()
-
-        query_task = BaseQueryTask('Background Query', self.iface, self.client, query, result)
-        QgsApplication.taskManager().addTask(base_query_task)
-        
-
-
     def closeEvent(self, event):
         self.closingPlugin.emit()
         event.accept()
@@ -118,25 +107,6 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         for elm in self.layer_import_elements:
             elm.setEnabled(False)
-
-    def run_query_handler(self):
-        # GUI
-        self.base_query_complete = False
-
-        for elm in self.base_query_elements + self.layer_import_elements:
-            elm.setEnabled(False)
-
-        self.run_query_button.setText('Running...')
-        self.run_query_button.repaint()
-
-        QgsMessageLog.logMessage('Button pressed', 'BigQuery Layers', Qgis.Info)
-
-        # Run query as a task
-        #query_task =  BaseQueryTask('Background Query', iface=self.iface, client, query, result) T
-
-        base_query_task = QgsTask.fromFunction('Base query task', self.run_base_query, on_finished=self.base_query_completed)
-        QgsApplication.taskManager().addTask(base_query_task)
-        QgsMessageLog.logMessage('Button pressed bottom', 'BigQuery Layers', Qgis.Info)
 
     def run_base_query_handler(self):
         QgsMessageLog.logMessage('Running base query', 'BigQuery Layers', Qgis.Info)
@@ -164,142 +134,6 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsApplication.taskManager().addTask(self.base_query_task)
 
         QgsMessageLog.logMessage('After task manager', 'BigQuery Layers', Qgis.Info)
-
-
-
-    def base_query_completed(self, exception, result=None):
-        if exception is None:
-            # Should always return exception
-            QgsMessageLog.logMessage('This should not occur', 'BigQuery Layers', Qgis.Info)
-        else:
-            if isinstance(exception, EverythingIsFineException):
-                # Query completed without errors
-                QgsMessageLog.logMessage('Completed fine', 'BigQuery Layers', Qgis.Info)
-
-                # Number of rows in query
-                rowcount = str(self.bq.num_rows_base())
-
-                # Columns in query
-                fields = self.bq.fields()
-                self.geometry_column_combo_box.addItems(fields)
-
-                self.query_progress_field.setText('Rows returned: {}'.format(rowcount))
-                # self.query_progress_field.adjustSize()
-
-                # Enable all elements
-                self.base_query_complete = True
-                for elm in self.base_query_elements + self.layer_import_elements:
-                    elm.setEnabled(True)
-                self.run_query_button.setText('Run query')
-
-            else:
-                QgsMessageLog.logMessage('Completed with errors', 'BigQuery Layers', Qgis.Info)
-                self.base_query_complete = False
-
-                # Enable top buttons, import buttons are disabled
-                for elm in self.base_query_elements:
-                    elm.setEnabled(True)
-                self.run_query_button.setText('Run query')
-                self.query_progress_field.setText('Errors in base query')
-                self.iface.messageBar().pushMessage("BigQuery Layers", "Query failed: " + exception.__repr__(), level=Qgis.Critical)
-                raise exception
-
-    def add_full_layer(self, task, uri):
-        QgsMessageLog.logMessage('Running add full layer', 'BigQuery Layers', Qgis.Info)
-
-        layer_file = self.bq.write_base_result()
-        self.layer_file_path = layer_file
-        self.layer_uri = uri.format(file=layer_file)
-
-        raise EverythingIsFineException()
-
-    def newTask(self):
-        """Create a task and add it to the Task Manager"""
-        self.task = TestTask('Custom Task')
-        #connect to signals from the background threads to perform gui operations
-        #such as updating the progress bar
-        self.task.begun.connect(lambda: QgsMessageLog.logMessage('Beginnging', 'Test task', Qgis.Info))
-        self.task.progressChanged.connect(lambda: self.prog.setValue(self.task.progress()))
-        self.task.taskCompleted.connect(lambda: QgsMessageLog.logMessage('Beginnging', 'Test task', Qgis.Info))
-        ##self.task.taskTerminated.connect(self.TaskCancelled)
-        QgsApplication.taskManager().addTask(self.task)
-
-    def add_extents(self, task, uri, extent_wkt, geom_field):
-        QgsMessageLog.logMessage('Running add extent layer', 'BigQuery Layers', Qgis.Info)
-
-        layer_file = self.bq.write_extent_result(extent_wkt, geom_field)
-        self.layer_file_path = layer_file
-        self.layer_uri = uri.format(file=layer_file)
-
-        raise EverythingIsFineException()
-
-    def run_bigquery(self, task, q):
-        QgsMessageLog.logMessage('IN run_bigquert', 'BigQuery Layers', Qgis.Info)
-        client = bigquery.Client('uc-shoppertrak-poc')
-        query_job = client.query(q)
-        QgsMessageLog.logMessage('Running query', 'BigQuery Layers', Qgis.Info)
-        QgsMessageLog.logMessage(q, 'BigQuery Layers', Qgis.Info)
-        query_result = query_job.result()
-        print("got result")
-        self.test_query_result = query_result
-
-        raise EverythingIsFineException()
-
-    def write_to_tempfile(self, task, progress):
-        QgsMessageLog.logMessage('In write tempfiel task', 'BigQuery Layers', Qgis.Info)
-        query_result = self.test_query_result
-        schema_fields =  [field.name for field in query_result.schema]
-        total_rows = query_result.total_rows
-        QgsMessageLog.logMessage('Total rows: '+str(total_rows), 'BigQuery Layers', Qgis.Info)
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as fp:
-            filepath = fp.name
-            writer = csv.DictWriter(fp, fieldnames=schema_fields)
-            writer.writeheader()
-            progress_percent = 0
-            progress.setValue(progress_percent)
-            QgsMessageLog.logMessage('File path: '+filepath, 'BigQuery Layers', Qgis.Info)
-            #self.progressBar.reset()
-            #self.progressBar.setValue(progress_percent)
-
-            for i, row in enumerate(query_result, 1):
-                
-                new_progress_percent = int(100 * (i / total_rows))
-                if new_progress_percent > progress_percent:
-                    progress_percent = new_progress_percent
-                    progress.setValue(progress_percent)
-                    #self.progressBar.setValue(progress_percent)
-                    QgsMessageLog.logMessage(str(progress_percent), 'BigQuery Layers', Qgis.Info)
-
-                writer.writerow(dict(row.items()))
-            self.last_filepath = filepath
-        
-        raise EverythingIsFineException()
-
-    def write_task_starter(self, exception, result=None):
-
-        QgsMessageLog.logMessage('In write task starter', 'BigQuery Layers', Qgis.Info)
-        
-
-        progressMessageBar = self.iface.messageBar().createMessage("Doing something boring...")
-        progress = QProgressBar()
-        progress.setMaximum(100)
-        progress.setAlignment(Qt.AlignLeft|Qt.AlignVCenter)
-        progressMessageBar.layout().addWidget(progress)
-        self.iface.messageBar().pushWidget(progressMessageBar, Qgis.Info)
-
-
-        task = TestTask('Custom Task', iface=self.iface)
-        #connect to signals from the background threads to perform gui operations
-        #such as updating the progress bar
-        task.begun.connect(lambda: QgsMessageLog.logMessage('Beginnging', 'Test task', Qgis.Info))
-        task.progressChanged.connect(lambda: progress.setValue(task.progress()))
-        task.taskCompleted.connect(lambda: QgsMessageLog.logMessage('Completed', 'Test task', Qgis.Info))
-        ##self.task.taskTerminated.connect(self.TaskCancelled)
-        QgsApplication.taskManager().addTask(task)
-
-        #task = QgsTask.fromFunction('Download file', self.write_to_tempfile, on_finished=None, progress=progress)
-        #QgsApplication.taskManager().addTask(task)
-        #QgsMessageLog.logMessage('asdasd', 'BigQuery Layers', Qgis.Info)
     
     def add_layer_button_handler(self):
         geom_field = self.geometry_column_combo_box.currentText()
@@ -317,25 +151,17 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer)
 
-
-
             # TASK 1: DOWNLOAD
             self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue, elements_in_layer)
 
             # TASK 2: Convert
             self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
-
             
             self.parent_task.addSubTask(self.download_task, [], QgsTask.ParentDependsOnSubTask)
             self.parent_task.addSubTask(self.convert_task, [self.download_task], QgsTask.ParentDependsOnSubTask)
             
-
             QgsApplication.taskManager().addTask(self.parent_task)
-            #QgsApplication.taskManager().addTask(self.convert_task)
 
-
-
-            #task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)
         elif self.sender().objectName() == 'add_extents_button':
             self.add_extents_button.setText('Adding layer...')
 
@@ -367,16 +193,6 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             
 
             QgsApplication.taskManager().addTask(self.parent_task)
-
-    def add_layer_button_handler_old2(self):
-        if self.sender().objectName() == 'add_all_button':
-            QgsMessageLog.logMessage('New layer button handler', 'BigQuery Layers', Qgis.Info)
-            self.add_all_button.setText('Adding layer...')
-            print(self.query_edit.toPlainText())
-            task = QgsTask.fromFunction('Run query', self.run_bigquery, on_finished=self.write_task_starter, q=self.query_edit.toPlainText())
-            self.add_all_button.setText('Add layer')
-            QgsApplication.taskManager().addTask(task)
-            QgsMessageLog.logMessage('Below started task', 'BigQuery Layers', Qgis.Info)
 
 
     def add_layer_button_handler_old(self):
@@ -417,72 +233,3 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsApplication.taskManager().addTask(task)
         # For some reason it needs to log in order for tasks to run
         QgsMessageLog.logMessage('After add button', 'BigQuery Layers', Qgis.Info)
-
-    def layer_added(self, exception, result=None):
-        if exception is None:
-            # Should always return exception
-            QgsMessageLog.logMessage('This should not occur', 'BigQuery Layers', Qgis.Info)
-        else:
-            QgsMessageLog.logMessage('Layer added', 'BigQuery Layers', Qgis.Info)
-            if isinstance(exception, EverythingIsFineException):
-                #ogr2ogr stuff - move to background process?
-                gpkg_layer_name = self.csv_to_spatiallite()
-
-                # Must be done in main thread
-                try:
-                    if gpkg_layer_name:
-                        gpkg_layer = gpkg_layer_name + '|layername=' + gpkg_layer_name.split('/')[-1].split('.')[0]
-                        display_name = 'BigQuery layer'
-                        vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
-                    else:
-                        vlayer = self.iface.addVectorLayer(self.layer_uri, 'BigQuery layer', 'delimitedtext')
-                    if vlayer:
-                        elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
-                        self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_added), 
-                            level=Qgis.Info)
-                except Exception as e:
-                    print(e)
-
-            else:
-                QgsMessageLog.logMessage(exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
-
-            self.add_all_button.setText('Add all')
-            self.add_extents_button.setText('Add window extents')
-            for elm in self.base_query_elements + self.layer_import_elements:
-                elm.setEnabled(True)
-
-    def csv_to_spatiallite(self):
-        ogr2ogr_executable = shutil.which('ogr2ogr')
-        geom_field = self.geometry_column_combo_box.currentText()
-
-        if not ogr2ogr_executable:
-            QgsMessageLog.logMessage('ogr2ogr executable not found', 'BigQuery Layers', Qgis.Info)
-            return
-
-        cp_params = [
-            'cp',
-            self.layer_file_path,
-            self.layer_file_path + '.csv'
-        ]
-
-        ogr2ogr_params = [
-            ogr2ogr_executable,
-            '-f', 'GPKG', '{}.gpkg'.format(self.layer_file_path),
-            self.layer_file_path + '.csv',
-            '-oo', 'HEADERS=YES',
-            '-oo', 'GEOM_POSSIBLE_NAMES={}'.format(geom_field),
-            '-a_srs', 'EPSG:4326'
-        ]
-
-        try:
-            subprocess.check_output(cp_params)
-            subprocess.check_output(ogr2ogr_params)
-        except Exception as e:
-            print(e)
-
-        return self.layer_file_path + ".gpkg"
-
-
-
-
-
