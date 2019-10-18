@@ -37,7 +37,7 @@ import tempfile, csv
 
 from .bqloader.bqloader import BigQueryConnector
 
-from .background_tasks import TestTask, BackgroundQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage
+from .background_tasks import TestTask, BaseQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage, ExtentsQueryTask
 
 import time
 from qgis.PyQt.QtWidgets import QProgressBar
@@ -74,6 +74,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.result_queue = Queue()
         self.file_queue = Queue()
         self.converted_file_queue = Queue()
+        self.extent_query_job = Queue()
 
         # Elements associated with base query
         self.base_query_elements = [self.project_edit, self.query_edit, self.run_query_button]
@@ -101,7 +102,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         result = Queue()
 
-        query_task = BackgroundQueryTask('Background Query', self.iface, self.client, query, result)
+        query_task = BaseQueryTask('Background Query', self.iface, self.client, query, result)
         QgsApplication.taskManager().addTask(base_query_task)
         
 
@@ -131,7 +132,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         QgsMessageLog.logMessage('Button pressed', 'BigQuery Layers', Qgis.Info)
 
         # Run query as a task
-        #query_task =  BackgroundQueryTask('Background Query', iface=self.iface, client, query, result) T
+        #query_task =  BaseQueryTask('Background Query', iface=self.iface, client, query, result) T
 
         base_query_task = QgsTask.fromFunction('Base query task', self.run_base_query, on_finished=self.base_query_completed)
         QgsApplication.taskManager().addTask(base_query_task)
@@ -149,7 +150,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.run_query_button.setText('Running...')
         self.run_query_button.repaint()
         
-        self.base_query_task = BackgroundQueryTask('Background Query',
+        self.base_query_task = BaseQueryTask('Background Query',
             self.iface,
             self.client,
             query,
@@ -303,9 +304,6 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     def add_layer_button_handler(self):
         geom_field = self.geometry_column_combo_box.currentText()
 
-        base_query_job = self.base_query_job.get()
-        self.base_query_job.put(base_query_job)
-
         geom_column = self.geometry_column_combo_box.currentText()
 
         for elm in self.base_query_elements + self.layer_import_elements:
@@ -320,7 +318,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
 
             # TASK 1: DOWNLOAD
-            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, base_query_job, self.file_queue)
+            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue)
 
             # TASK 2: Convert
             self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
@@ -338,7 +336,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             #task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)
         elif self.sender().objectName() == 'add_extents_button':
             self.add_extents_button.setText('Adding layer...')
-            QgsMessageLog.logMessage('Add layer', 'BigQuery Layers', Qgis.Info)
+
             extent = self.iface.mapCanvas().extent()
 
             # Reproject extents if project CRS is not EPSG:4326
@@ -349,9 +347,24 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
                 extent = transform.transform(extent)
 
-            task = QgsTask.fromFunction('Add layer', self.add_extents, on_finished=self.layer_added,
-                                        uri=uri, extent_wkt=extent.asWktPolygon(), geom_field=geom_field)
+            self.parent_task = LayerImportTask('Parent import task', self.iface, self.converted_file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements)
 
+            # TASK 1: Extents query
+            self.extents_query_task = ExtentsQueryTask('Select window extents', self.iface, self.client,
+            self.base_query_job, self.extent_query_job, extent.asWktPolygon(), geom_column)
+
+            # TASK 2: Retrive - from extent querty
+            self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.extent_query_job, self.file_queue)
+
+            # TASK 3: Convert
+            self.convert_task = ConvertToGeopackage('Convert to Geopackage', self.iface, geom_column, self.file_queue, self.converted_file_queue)
+
+            self.parent_task.addSubTask(self.extents_query_task, [], QgsTask.ParentDependsOnSubTask)
+            self.parent_task.addSubTask(self.download_task, [self.extents_query_task], QgsTask.ParentDependsOnSubTask)
+            self.parent_task.addSubTask(self.convert_task, [self.extents_query_task, self.download_task], QgsTask.ParentDependsOnSubTask)
+            
+
+            QgsApplication.taskManager().addTask(self.parent_task)
 
     def add_layer_button_handler_old2(self):
         if self.sender().objectName() == 'add_all_button':

@@ -33,7 +33,7 @@ class TestTask(QgsTask):
             self.iface.messageBar().pushMessage('Task Complete')
 
 
-class BackgroundQueryTask(QgsTask):
+class BaseQueryTask(QgsTask):
     """Here we subclass QgsTask"""
     def __init__(self, desc, iface, client, query, query_job, query_progress_field, geometry_column_combo_box, base_query_elements, layer_import_elements, run_query_button):
         QgsTask.__init__(self, desc)
@@ -110,7 +110,9 @@ class RetrieveQueryResultTask(QgsTask):
             QgsMessageLog.logMessage('In write tempfile task', 'BigQuery Layers', Qgis.Info)
             #query_job  = self.query_job.get()
             #self.query_job.put(query_job)
-            query_result = self.query_job.result()
+            query_job = self.query_job.get()
+            self.query_job.put(query_job)
+            query_result = query_job.result()
             schema_fields =  [field.name for field in query_result.schema]
             total_rows = query_result.total_rows
             QgsMessageLog.logMessage('Total rows: '+str(total_rows), 'BigQuery Layers', Qgis.Info)
@@ -257,4 +259,75 @@ class LayerImportTask(QgsTask):
         self.add_extents_button.setText('Add window extents')
         for elm in self.base_query_elements + self.layer_import_elements:
             elm.setEnabled(True)
+
+class ExtentsQueryTask(QgsTask):
+    """Here we subclass QgsTask"""
+    def __init__(self, desc, iface, client, base_query_job, extent_query_job, extent, geo_field):
+        QgsTask.__init__(self, desc)
+        self.iface = iface
+        self.client = client
+        self.base_query_job = base_query_job
+        self.extent_query_job = extent_query_job
+        self.extent = extent
+        self.geo_field = geo_field
+        self.exception = None
+
+    def run(self):
+        """This function is where you do the 'heavy lifting' or implement
+        the task which you want to run in a background thread. This function 
+        must return True or False and should only interact with the main thread
+        via signals"""
+        try:
+            QgsMessageLog.logMessage('In ExentsQueryTask', 'BigQuery Layers', Qgis.Info)
+            base_query_job = self.base_query_job.get()
+            self.base_query_job.put(base_query_job)
+
+            base_query_table_path = '.'.join([self.client.project,
+                                        base_query_job.destination.dataset_id,
+                                        base_query_job.destination.table_id])
+
+            base_query_table = self.client.get_table(base_query_table_path)
+            base_table_geo_field = [field for field in base_query_table.schema if field.name == self.geo_field][0]
+
+            if base_table_geo_field.field_type == 'GEOGRAPHY':
+                q = """SELECT
+                *
+                FROM
+                `{}`
+                WHERE
+                ST_INTERSECTS({}, ST_GEOGFROMTEXT('{}'))""".format(base_query_table_path,
+                                                                    base_table_geo_field.name,
+                                                                    self.extent)
+            else:
+                q = """SELECT
+                    *
+                    FROM
+                    `{}`
+                    WHERE
+                        ST_INTERSECTS(ST_GEOGFROMTEXT({}), ST_GEOGFROMTEXT('{}'))""".format(base_query_table_path,
+                                                                            base_table_geo_field.name,
+                                                                            self.extent)
+
+            extent_query_job = self.client.query(q)
+            extent_query_results = extent_query_job.result()
+
+            self.extent_query_job.put(extent_query_job)
+            return True
+        except Exception as e:
+            self.exception = e
+            return True
+
+    def finished(self, result):
+        """This function is called automatically when the task is completed and is
+        called from the main thread so it is safe to interact with the GUI etc here"""
+        QgsMessageLog.logMessage('Finished is called', 'BigQuery Layers', Qgis.Info)
+        
+        if result is False:
+            self.iface.messageBar().pushMessage('Task was cancelled')
+        elif result is True and self.exception:
+            QgsMessageLog.logMessage('Extent query task: ' + self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+        else:
+            QgsMessageLog.logMessage('Extents query completed successfully', 'BigQuery Layers', Qgis.Info)
+
+
 
