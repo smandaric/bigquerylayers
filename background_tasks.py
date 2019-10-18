@@ -9,12 +9,10 @@ class UpstreamTaskCanceled(Exception):
 
 class BaseQueryTask(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, client, query, query_job, query_progress_field, geometry_column_combo_box, base_query_elements, layer_import_elements, run_query_button):
+    def __init__(self, desc, iface, base_query_job, query_progress_field, geometry_column_combo_box, base_query_elements, layer_import_elements, run_query_button):
         QgsTask.__init__(self, desc)
         self.iface = iface
-        self.client = client
-        self.query = query
-        self.query_job_param = query_job
+        self.base_query_job = base_query_job
         self.exception = None
         self.query_progress_field = query_progress_field
         self.geometry_column_combo_box = geometry_column_combo_box
@@ -30,9 +28,9 @@ class BaseQueryTask(QgsTask):
         via signals"""
         try:
             QgsMessageLog.logMessage('In backgrond task', 'BigQuery Layers', Qgis.Info)
-            self.query_job = self.client.query(self.query)
-            self.query_result = self.query_job.result()
-            self.query_job_param.put(self.query_job, block=True)
+            base_query_job = self.base_query_job.get()
+            self.query_result = base_query_job.result()
+            self.base_query_job.put(base_query_job)
             QgsMessageLog.logMessage('Query complete', 'BigQuery Layers', Qgis.Info)
             self.setProgress(100)
             return True
@@ -105,7 +103,7 @@ class RetrieveQueryResultTask(QgsTask):
                 writer.writeheader()
                 progress_percent = 0
                 self.setProgress(progress_percent)
-                QgsMessageLog.logMessage('File path: '+filepath, 'BigQuery Layers', Qgis.Info)
+                QgsMessageLog.logMessage('File path: '+ filepath, 'BigQuery Layers', Qgis.Info)
 
                 for i, row in enumerate(query_result, 1):
                     new_progress_percent = int(100 * (i / total_rows))
@@ -144,12 +142,11 @@ class RetrieveQueryResultTask(QgsTask):
 
 class ConvertToGeopackage(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, geometry_column, input_file_queue, output_file_queue, upstream_taks_canceled):
+    def __init__(self, desc, iface, geometry_column, file_queue, upstream_taks_canceled):
         QgsTask.__init__(self, desc, QgsTask.CanCancel)
         self.iface = iface
         self.geometry_column = geometry_column
-        self.input_file_queue = input_file_queue
-        self.output_file_queue = output_file_queue
+        self.file_queue = file_queue
         self.exception = None
         self.upstream_taks_canceled = upstream_taks_canceled
 
@@ -165,14 +162,10 @@ class ConvertToGeopackage(QgsTask):
                 raise UpstreamTaskCanceled
             
             QgsMessageLog.logMessage('Running conversion', 'BigQuery Layers', Qgis.Info)
-            input_file_path = self.input_file_queue.get()
-            self.input_file_queue.put(input_file_path)
-
+            input_file_path = self.file_queue.get()
             temp_file_path = input_file_path + '.csv'
-
             output_file_path = input_file_path + '.gpkg'
             
-
             ogr2ogr_executable = shutil.which('ogr2ogr')
 
             if not ogr2ogr_executable:
@@ -197,7 +190,7 @@ class ConvertToGeopackage(QgsTask):
             subprocess.check_output(cp_params)
             subprocess.check_output(ogr2ogr_params)
 
-            self.output_file_queue.put(output_file_path)
+            self.file_queue.put(output_file_path)
             return True
         except Exception as e:
             self.exception = e
