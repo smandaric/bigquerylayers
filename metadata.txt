@@ -12,12 +12,12 @@ qgisMinimumVersion=3.0
 description=Imports layers from BigQuery results
 version=0.1.1
 author=Stefan Mandaric
-email=stefan.mandaric@unacast.com
+email=stefan.mandaric@gmail.com
 
 about=BigQuery layers is a plugin for visualizing BigQuery GIS data in QGIS. The user must set up a GCP project and authenticate the client as described in the plugin homepage. 
 
-tracker=https://github.com/unacast/bigquerylayers/issues
-repository=https://github.com/unacast/bigquerylayers
+tracker=https://github.com/smandaric/bigquerylayers/issues
+repository=https://github.com/smandaric/bigquerylayers
 # End of mandatory metadata
 
 # Recommended items:
@@ -28,7 +28,7 @@ repository=https://github.com/unacast/bigquerylayers
 # Tags are comma separated with spaces allowed
 tags=python, BigQuery, Google Cloud
 
-homepage=https://github.com/unacast/bigquerylayers
+homepage=https://github.com/smandaric/bigquerylayers
 category=Database
 icon=icon.png
 # experimental flag
