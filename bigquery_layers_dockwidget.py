@@ -23,31 +23,19 @@
 """
 
 import os, shutil, subprocess, sys
+from queue import Queue
 
 from PyQt5 import QtGui, QtWidgets, uic
 from PyQt5.QtCore import pyqtSignal
-
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject, QgsMessageLog, Qgis, QgsTask, QgsApplication, QgsDataSourceUri
 from PyQt5.QtCore import QDate, QTime, QDateTime, Qt, pyqtSlot
-
-sys.path = [os.path.join(os.path.dirname(__file__), 'bqloader', 'libs')] + sys.path
-from google.cloud import bigquery
-
-import tempfile, csv
-
-from .bqloader.bqloader import BigQueryConnector
-
-from .background_tasks import BaseQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage, ExtentsQueryTask
-
-import time
 from qgis.PyQt.QtWidgets import QProgressBar
 from qgis.PyQt.QtCore import *
 
-from queue import Queue
+sys.path = [os.path.join(os.path.dirname(__file__), 'libs')] + sys.path
+from google.cloud import bigquery
 
-class EverythingIsFineException(Exception):
-    pass
-
+from .background_tasks import BaseQueryTask, RetrieveQueryResultTask, LayerImportTask, ConvertToGeopackage, ExtentsQueryTask
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'bigquery_layers_dockwidget_base.ui'))
@@ -194,7 +182,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             QgsApplication.taskManager().addTask(self.parent_task)
 
-
+    # TODO: Used for fallback when no ogr2ogr available
     def add_layer_button_handler_old(self):
         assert self.base_query_complete
 
