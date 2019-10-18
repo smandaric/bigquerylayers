@@ -4,6 +4,8 @@ import subprocess
 import shutil
 from qgis.core import QgsTask, QgsMessageLog, Qgis
 
+class UpstreamTaskCanceled(Exception):
+    pass
 
 class BaseQueryTask(QgsTask):
     """Here we subclass QgsTask"""
@@ -46,7 +48,8 @@ class BaseQueryTask(QgsTask):
         if result is False:
             self.iface.messageBar().pushMessage('Task was cancelled')
         elif result is True and self.exception:
-            QgsMessageLog.logMessage(self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            self.iface.messageBar().pushMessage('Query Failed: ' + self.exception.__repr__(), level=Qgis.Critical)
+            #QgsMessageLog.logMessage(self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
         else:
             QgsMessageLog.logMessage('Query successfull', 'BigQuery Layers', Qgis.Info)
 
@@ -56,8 +59,8 @@ class BaseQueryTask(QgsTask):
             fields = [field.name for field in self.query_result.schema]
             self.geometry_column_combo_box.addItems(fields)
 
-            for elm in self.base_query_elements:
-                elm.setEnabled(True)
+        for elm in self.base_query_elements:
+            elm.setEnabled(True)
 
         for elm in self.layer_import_elements:
             elm.setEnabled(True)
@@ -65,13 +68,14 @@ class BaseQueryTask(QgsTask):
 
 class RetrieveQueryResultTask(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, query_job, file_queue, elements_in_layer):
+    def __init__(self, desc, iface, query_job, file_queue, elements_in_layer, upstream_taks_canceled):
         QgsTask.__init__(self, desc)
         self.iface = iface
         self.query_job = query_job
         self.file_queue = file_queue
         self.exception = False
         self.elements_in_layer = elements_in_layer
+        self.upstream_taks_canceled = upstream_taks_canceled
 
 
     def run(self):
@@ -80,6 +84,10 @@ class RetrieveQueryResultTask(QgsTask):
         must return True or False and should only interact with the main thread
         via signals"""
         try:
+            upstream_taks_canceled = self.upstream_taks_canceled.get()
+            if upstream_taks_canceled:
+                raise UpstreamTaskCanceled
+
             QgsMessageLog.logMessage('In write tempfile task', 'BigQuery Layers', Qgis.Info)
             #query_job  = self.query_job.get()
             #self.query_job.put(query_job)
@@ -112,7 +120,7 @@ class RetrieveQueryResultTask(QgsTask):
             QgsMessageLog.logMessage('Query complete', 'BigQuery Layers', Qgis.Info)
             self.setProgress(100)
             return True
-        except Exception as e:
+        except Exception as e:            
             self.exception = e
             return True
 
@@ -123,21 +131,27 @@ class RetrieveQueryResultTask(QgsTask):
         
         if result is False:
             self.iface.messageBar().pushMessage('Task was cancelled')
+            self.upstream_taks_canceled.put(True)
+        if result is True and isinstance(self.exception, UpstreamTaskCanceled):
+            self.upstream_taks_canceled.put(True)
         elif result is True and self.exception:
             QgsMessageLog.logMessage('Result retrival: '+self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            self.upstream_taks_canceled.put(True)
         else:
             QgsMessageLog.logMessage('Finished import', 'BigQuery Layers', Qgis.Info)
+            self.upstream_taks_canceled.put(False)
             
 
 class ConvertToGeopackage(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, geometry_column, input_file_queue, output_file_queue):
-        QgsTask.__init__(self, desc)
+    def __init__(self, desc, iface, geometry_column, input_file_queue, output_file_queue, upstream_taks_canceled):
+        QgsTask.__init__(self, desc, QgsTask.CanCancel)
         self.iface = iface
         self.geometry_column = geometry_column
         self.input_file_queue = input_file_queue
         self.output_file_queue = output_file_queue
         self.exception = None
+        self.upstream_taks_canceled = upstream_taks_canceled
 
 
     def run(self):
@@ -146,6 +160,10 @@ class ConvertToGeopackage(QgsTask):
         must return True or False and should only interact with the main thread
         via signals"""
         try:
+            upstream_taks_canceled = self.upstream_taks_canceled.get()
+            if upstream_taks_canceled:
+                raise UpstreamTaskCanceled
+            
             QgsMessageLog.logMessage('Running conversion', 'BigQuery Layers', Qgis.Info)
             input_file_path = self.input_file_queue.get()
             self.input_file_queue.put(input_file_path)
@@ -188,19 +206,22 @@ class ConvertToGeopackage(QgsTask):
     def finished(self, result):
         """This function is called automatically when the task is completed and is
         called from the main thread so it is safe to interact with the GUI etc here"""
-        QgsMessageLog.logMessage('Finished is called', 'BigQuery Layers', Qgis.Info)
-        
+
         if result is False:
             self.iface.messageBar().pushMessage('Task was cancelled')
+            self.upstream_taks_canceled.put(True)
+        if result is True and isinstance(self.exception, UpstreamTaskCanceled):
+            self.upstream_taks_canceled.put(True)
         elif result is True and self.exception:
-            QgsMessageLog.logMessage('Error in conversion: ' + self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
-            super().cancel()
+            QgsMessageLog.logMessage('Result retrival: '+self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            self.upstream_taks_canceled.put(True)
         else:
-            QgsMessageLog.logMessage('Finished Conversion', 'BigQuery Layers', Qgis.Info)
+            QgsMessageLog.logMessage('Finished conversion', 'BigQuery Layers', Qgis.Info)
+            self.upstream_taks_canceled.put(False)
 
 
 class LayerImportTask(QgsTask):
-    def __init__(self, desc, iface, layer_file_path, add_all_button, add_extents_button, base_query_elements, layer_import_elements, elements_in_layer):
+    def __init__(self, desc, iface, layer_file_path, add_all_button, add_extents_button, base_query_elements, layer_import_elements, elements_in_layer, upstream_taks_canceled):
         QgsTask.__init__(self, desc)
         self.iface = iface
         self.layer_file_path = layer_file_path
@@ -210,12 +231,23 @@ class LayerImportTask(QgsTask):
         self.base_query_elements = base_query_elements
         self.layer_import_elements = layer_import_elements
         self.elements_in_layer = elements_in_layer
+        self.upstream_taks_canceled = upstream_taks_canceled
 
     def run(self):
-        return True
+        try:
+            upstream_taks_canceled = self.upstream_taks_canceled.get()
+            if upstream_taks_canceled:
+                raise UpstreamTaskCanceled
+            return True
+        except Exception as e:
+            self.exception = e
+            return True
 
     def finished(self, result):
         QgsMessageLog.logMessage('LayerImportTask has finished', 'BigQuery Layers', Qgis.Info)
+        if result is True and isinstance(self.exception, UpstreamTaskCanceled):
+            self.iface.messageBar().pushMessage('Layer import failed. See logs for more info', level=Qgis.Critical)
+
         if result is True and not self.exception:
             gpkg_layer_name = self.layer_file_path.get()
             try:
@@ -229,7 +261,7 @@ class LayerImportTask(QgsTask):
                     self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
                         level=Qgis.Info)
             except Exception as e:
-                print(e)
+                self.iface.messageBar().pushMessage('Layer import failed: ' + self.exception.__repr__(), level=Qgis.Critical)
 
         self.add_all_button.setText('Add all')
         self.add_extents_button.setText('Add window extents')
@@ -238,7 +270,7 @@ class LayerImportTask(QgsTask):
 
 class ExtentsQueryTask(QgsTask):
     """Here we subclass QgsTask"""
-    def __init__(self, desc, iface, client, base_query_job, extent_query_job, extent, geo_field):
+    def __init__(self, desc, iface, client, base_query_job, extent_query_job, extent, geo_field, upstream_taks_canceled):
         QgsTask.__init__(self, desc)
         self.iface = iface
         self.client = client
@@ -247,6 +279,7 @@ class ExtentsQueryTask(QgsTask):
         self.extent = extent
         self.geo_field = geo_field
         self.exception = None
+        self.upstream_taks_canceled = upstream_taks_canceled
 
     def run(self):
         """This function is where you do the 'heavy lifting' or implement
@@ -254,6 +287,10 @@ class ExtentsQueryTask(QgsTask):
         must return True or False and should only interact with the main thread
         via signals"""
         try:
+            upstream_taks_canceled = self.upstream_taks_canceled.get()
+            if upstream_taks_canceled:
+                raise UpstreamTaskCanceled
+
             QgsMessageLog.logMessage('In ExentsQueryTask', 'BigQuery Layers', Qgis.Info)
             base_query_job = self.base_query_job.get()
             self.base_query_job.put(base_query_job)
@@ -300,10 +337,12 @@ class ExtentsQueryTask(QgsTask):
         
         if result is False:
             self.iface.messageBar().pushMessage('Task was cancelled')
+            self.upstream_taks_canceled.put(True)
+        if result is True and isinstance(self.exception, UpstreamTaskCanceled):
+            self.upstream_taks_canceled.put(True)
         elif result is True and self.exception:
             QgsMessageLog.logMessage('Extent query task: ' + self.exception.__repr__(), 'BigQuery Layers', Qgis.Critical)
+            self.upstream_taks_canceled.put(True)
         else:
             QgsMessageLog.logMessage('Extents query completed successfully', 'BigQuery Layers', Qgis.Info)
-
-
-
+            self.upstream_taks_canceled.put(False)
