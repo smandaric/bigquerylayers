@@ -31,7 +31,7 @@ changelog=0.2.0 2019-10-18
     * Update bundled libraries 
 
 # Tags are comma separated with spaces allowed
-tags=python, BigQuery, Google Cloud
+tags=cloud, BigQuery, Google Cloud
 
 homepage=https://github.com/smandaric/bigquerylayers
 category=Database
