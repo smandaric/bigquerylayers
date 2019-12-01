@@ -144,7 +144,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
             self.add_all_button.setText('Adding layer...')
 
-            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
+            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled, geom_column)
 
             # TASK 1: DOWNLOAD
             self.download_task = RetrieveQueryResultTask('Retrieve query result', self.iface, self.base_query_job, self.file_queue, elements_in_layer, upstream_taks_canceled)
@@ -170,7 +170,7 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
                 extent = transform.transform(extent)
 
-            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled)
+            self.parent_task = LayerImportTask('BigQuery layer import', self.iface, self.file_queue, self.add_all_button, self.add_extents_button, self.base_query_elements, self.layer_import_elements, elements_in_layer, upstream_taks_canceled, geom_column)
 
             # TASK 1: Extents query
             self.extents_query_task = ExtentsQueryTask('Select window extents', self.iface, self.client,
@@ -189,42 +189,3 @@ class BigQueryLayersDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             QgsApplication.taskManager().addTask(self.parent_task)
 
-    # TODO: Used for fallback when no ogr2ogr available
-    def add_layer_button_handler_old(self):
-        assert self.base_query_complete
-
-        geom_field = self.geometry_column_combo_box.currentText()
-
-        # Windows support
-        if os.name == 'nt':
-            uri = 'file:///{{file}}?delimiter=,&crs=epsg:4326&wktField={field}'.format(field=geom_field)
-        else:
-            uri = 'file://{{file}}?delimiter=,&crs=epsg:4326&wktField={field}'.format(field=geom_field)
-
-        for elm in self.base_query_elements + self.layer_import_elements:
-            elm.setEnabled(False)
-
-        if self.sender().objectName() == 'add_all_button':
-            QgsMessageLog.logMessage('Pressed add all', 'BigQuery Layers', Qgis.Info)
-            self.add_all_button.setText('Adding layer...')
-            task = QgsTask.fromFunction('Add layer', self.add_full_layer, on_finished=self.layer_added, uri=uri)
-        elif self.sender().objectName() == 'add_extents_button':
-            self.add_extents_button.setText('Adding layer...')
-            QgsMessageLog.logMessage('Add layer', 'BigQuery Layers', Qgis.Info)
-            extent = self.iface.mapCanvas().extent()
-
-            # Reproject extents if project CRS is not EPSG:4326
-            project_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
-            
-            if project_crs != QgsCoordinateReferenceSystem(4326):
-                crcTarget = QgsCoordinateReferenceSystem(4326)
-                transform = QgsCoordinateTransform(project_crs, crcTarget, QgsProject.instance())
-                extent = transform.transform(extent)
-
-            task = QgsTask.fromFunction('Add layer', self.add_extents, on_finished=self.layer_added,
-                                        uri=uri, extent_wkt=extent.asWktPolygon(), geom_field=geom_field)
-
-        self.run_query_button.repaint()
-        QgsApplication.taskManager().addTask(task)
-        # For some reason it needs to log in order for tasks to run
-        QgsMessageLog.logMessage('After add button', 'BigQuery Layers', Qgis.Info)
