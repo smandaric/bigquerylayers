@@ -4,6 +4,7 @@ QGIS plugin for importing data from BigQuery
 ![screenshot](screenshot.png)
 
 ## Install
+This plugin requires an active (free tier or paid) subscription to Google Cloud Platform
 1. Create a project using the [Google Cloud Console](https://console.cloud.google.com)
 2. Install the Google Cloud SDK and authenticate using the command  `gcloud auth application-default login`
 3. Install the BigQuery layers plugin using the QGIS plugin manager
