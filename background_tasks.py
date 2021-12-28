@@ -176,11 +176,7 @@ class ConvertToGeopackage(QgsTask):
                 self.file_queue.put(input_file_path)
                 raise ExtensionNotFound
 
-            cp_params = [
-                'cp',
-                input_file_path,
-                temp_file_path
-            ]
+            shutil.copyfile(input_file_path, temp_file_path)
 
             ogr2ogr_params = [
                 ogr2ogr_executable,
@@ -191,7 +187,6 @@ class ConvertToGeopackage(QgsTask):
                 '-a_srs', 'EPSG:4326'
             ]
 
-            subprocess.check_output(cp_params)
             subprocess.check_output(ogr2ogr_params)
 
             self.file_queue.put(output_file_path)
@@ -253,7 +248,7 @@ class LayerImportTask(QgsTask):
             layer_file_path = self.layer_file_path.get()
             if layer_file_path.split('.')[-1] == 'gpkg':
                 try:
-                    gpkg_layer = layer_file_path + '|layername=' + layer_file_path.split('/')[-1].split('.')[0]
+                    gpkg_layer = layer_file_path + '|layername=' + os.path.basename(layer_file_path).split('.')[0]
                     display_name = 'BigQuery layer'
                     vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
                 
