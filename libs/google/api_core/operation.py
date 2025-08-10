@@ -61,10 +61,13 @@ class Operation(polling.PollingFuture):
             result.
         metadata_type (func:`type`): The protobuf type for the operation's
             metadata.
-        retry (google.api_core.retry.Retry): The retry configuration used
-            when polling. This can be used to control how often :meth:`done`
-            is polled. Regardless of the retry's ``deadline``, it will be
-            overridden by the ``timeout`` argument to :meth:`result`.
+        polling (google.api_core.retry.Retry): The configuration used for polling.
+            This parameter controls how often :meth:`done` is polled. If the
+            ``timeout`` argument is specified in the :meth:`result` method, it will
+            override the ``polling.timeout`` property.
+        retry (google.api_core.retry.Retry): DEPRECATED: use ``polling`` instead.
+            If specified it will override ``polling`` parameter to maintain
+            backward compatibility.
     """
 
     def __init__(
@@ -74,9 +77,10 @@ class Operation(polling.PollingFuture):
         cancel,
         result_type,
         metadata_type=None,
-        retry=polling.DEFAULT_RETRY,
+        polling=polling.DEFAULT_POLLING,
+        **kwargs
     ):
-        super(Operation, self).__init__(retry=retry)
+        super(Operation, self).__init__(polling=polling, **kwargs)
         self._operation = operation
         self._refresh = refresh
         self._cancel = cancel
@@ -132,8 +136,9 @@ class Operation(polling.PollingFuture):
                 )
                 self.set_result(response)
             elif self._operation.HasField("error"):
-                exception = exceptions.GoogleAPICallError(
-                    self._operation.error.message,
+                exception = exceptions.from_grpc_status(
+                    status_code=self._operation.error.code,
+                    message=self._operation.error.message,
                     errors=(self._operation.error,),
                     response=self._operation,
                 )
@@ -145,21 +150,28 @@ class Operation(polling.PollingFuture):
                 )
                 self.set_exception(exception)
 
-    def _refresh_and_update(self):
-        """Refresh the operation and update the result if needed."""
+    def _refresh_and_update(self, retry=None):
+        """Refresh the operation and update the result if needed.
+
+        Args:
+            retry (google.api_core.retry.Retry): (Optional) How to retry the RPC.
+        """
         # If the currently cached operation is done, no need to make another
         # RPC as it will not change once done.
         if not self._operation.done:
-            self._operation = self._refresh()
+            self._operation = self._refresh(retry=retry) if retry else self._refresh()
             self._set_result_from_operation()
 
-    def done(self):
+    def done(self, retry=None):
         """Checks to see if the operation is complete.
+
+        Args:
+            retry (google.api_core.retry.Retry): (Optional) How to retry the RPC.
 
         Returns:
             bool: True if the operation is complete, False otherwise.
         """
-        self._refresh_and_update()
+        self._refresh_and_update(retry)
         return self._operation.done
 
     def cancel(self):
@@ -184,7 +196,7 @@ class Operation(polling.PollingFuture):
         )
 
 
-def _refresh_http(api_request, operation_name):
+def _refresh_http(api_request, operation_name, retry=None):
     """Refresh an operation using a JSON/HTTP client.
 
     Args:
@@ -192,11 +204,16 @@ def _refresh_http(api_request, operation_name):
             should generally be
             :meth:`google.cloud._http.Connection.api_request`.
         operation_name (str): The name of the operation.
+        retry (google.api_core.retry.Retry): (Optional) retry policy
 
     Returns:
         google.longrunning.operations_pb2.Operation: The operation.
     """
     path = "operations/{}".format(operation_name)
+
+    if retry is not None:
+        api_request = retry(api_request)
+
     api_response = api_request(method="GET", path=path)
     return json_format.ParseDict(api_response, operations_pb2.Operation())
 
@@ -241,19 +258,25 @@ def from_http_json(operation, api_request, result_type, **kwargs):
     return Operation(operation_proto, refresh, cancel, result_type, **kwargs)
 
 
-def _refresh_grpc(operations_stub, operation_name):
+def _refresh_grpc(operations_stub, operation_name, retry=None):
     """Refresh an operation using a gRPC client.
 
     Args:
         operations_stub (google.longrunning.operations_pb2.OperationsStub):
             The gRPC operations stub.
         operation_name (str): The name of the operation.
+        retry (google.api_core.retry.Retry): (Optional) retry policy
 
     Returns:
         google.longrunning.operations_pb2.Operation: The operation.
     """
     request_pb = operations_pb2.GetOperationRequest(name=operation_name)
-    return operations_stub.GetOperation(request_pb)
+
+    rpc = operations_stub.GetOperation
+    if retry is not None:
+        rpc = retry(rpc)
+
+    return rpc(request_pb)
 
 
 def _cancel_grpc(operations_stub, operation_name):
@@ -268,7 +291,7 @@ def _cancel_grpc(operations_stub, operation_name):
     operations_stub.CancelOperation(request_pb)
 
 
-def from_grpc(operation, operations_stub, result_type, **kwargs):
+def from_grpc(operation, operations_stub, result_type, grpc_metadata=None, **kwargs):
     """Create an operation future using a gRPC client.
 
     This interacts with the long-running operations `service`_ (specific
@@ -283,18 +306,30 @@ def from_grpc(operation, operations_stub, result_type, **kwargs):
         operations_stub (google.longrunning.operations_pb2.OperationsStub):
             The operations stub.
         result_type (:func:`type`): The protobuf result type.
+        grpc_metadata (Optional[List[Tuple[str, str]]]): Additional metadata to pass
+            to the rpc.
         kwargs: Keyword args passed into the :class:`Operation` constructor.
 
     Returns:
         ~.api_core.operation.Operation: The operation future to track the given
             operation.
     """
-    refresh = functools.partial(_refresh_grpc, operations_stub, operation.name)
-    cancel = functools.partial(_cancel_grpc, operations_stub, operation.name)
+    refresh = functools.partial(
+        _refresh_grpc,
+        operations_stub,
+        operation.name,
+        metadata=grpc_metadata,
+    )
+    cancel = functools.partial(
+        _cancel_grpc,
+        operations_stub,
+        operation.name,
+        metadata=grpc_metadata,
+    )
     return Operation(operation, refresh, cancel, result_type, **kwargs)
 
 
-def from_gapic(operation, operations_client, result_type, **kwargs):
+def from_gapic(operation, operations_client, result_type, grpc_metadata=None, **kwargs):
     """Create an operation future from a gapic client.
 
     This interacts with the long-running operations `service`_ (specific
@@ -309,12 +344,22 @@ def from_gapic(operation, operations_client, result_type, **kwargs):
         operations_client (google.api_core.operations_v1.OperationsClient):
             The operations client.
         result_type (:func:`type`): The protobuf result type.
+        grpc_metadata (Optional[List[Tuple[str, str]]]): Additional metadata to pass
+            to the rpc.
         kwargs: Keyword args passed into the :class:`Operation` constructor.
 
     Returns:
         ~.api_core.operation.Operation: The operation future to track the given
             operation.
     """
-    refresh = functools.partial(operations_client.get_operation, operation.name)
-    cancel = functools.partial(operations_client.cancel_operation, operation.name)
+    refresh = functools.partial(
+        operations_client.get_operation,
+        operation.name,
+        metadata=grpc_metadata,
+    )
+    cancel = functools.partial(
+        operations_client.cancel_operation,
+        operation.name,
+        metadata=grpc_metadata,
+    )
     return Operation(operation, refresh, cancel, result_type, **kwargs)

@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,41 +25,48 @@ for the return value of :class:`Request`.
 """
 
 import abc
+import http.client as http_client
 
-import six
-from six.moves import http_client
+DEFAULT_RETRYABLE_STATUS_CODES = (
+    http_client.INTERNAL_SERVER_ERROR,
+    http_client.SERVICE_UNAVAILABLE,
+    http_client.GATEWAY_TIMEOUT,
+    http_client.REQUEST_TIMEOUT,
+    http_client.TOO_MANY_REQUESTS,
+)
+"""Sequence[int]:  HTTP status codes indicating a request can be retried.
+"""
+
 
 DEFAULT_REFRESH_STATUS_CODES = (http_client.UNAUTHORIZED,)
 """Sequence[int]:  Which HTTP status code indicate that credentials should be
-refreshed and a request should be retried.
+refreshed.
 """
 
 DEFAULT_MAX_REFRESH_ATTEMPTS = 2
 """int: How many times to refresh the credentials and retry a request."""
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Response(object):
+class Response(metaclass=abc.ABCMeta):
     """HTTP Response data."""
 
     @abc.abstractproperty
     def status(self):
         """int: The HTTP status code."""
-        raise NotImplementedError('status must be implemented.')
+        raise NotImplementedError("status must be implemented.")
 
     @abc.abstractproperty
     def headers(self):
         """Mapping[str, str]: The HTTP response headers."""
-        raise NotImplementedError('headers must be implemented.')
+        raise NotImplementedError("headers must be implemented.")
 
     @abc.abstractproperty
     def data(self):
         """bytes: The response body."""
-        raise NotImplementedError('data must be implemented.')
+        raise NotImplementedError("data must be implemented.")
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Request(object):
+class Request(metaclass=abc.ABCMeta):
     """Interface for a callable that makes HTTP requests.
 
     Specific transport implementations should provide an implementation of
@@ -69,8 +76,9 @@ class Request(object):
     """
 
     @abc.abstractmethod
-    def __call__(self, url, method='GET', body=None, headers=None,
-                 timeout=None, **kwargs):
+    def __call__(
+        self, url, method="GET", body=None, headers=None, timeout=None, **kwargs
+    ):
         """Make an HTTP request.
 
         Args:
@@ -93,4 +101,4 @@ class Request(object):
         """
         # pylint: disable=redundant-returns-doc, missing-raises-doc
         # (pylint doesn't play well with abstract docstrings.)
-        raise NotImplementedError('__call__ must be implemented.')
+        raise NotImplementedError("__call__ must be implemented.")

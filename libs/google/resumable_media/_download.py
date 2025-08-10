@@ -15,9 +15,8 @@
 """Virtual bases classes for downloading media from Google APIs."""
 
 
+import http.client
 import re
-
-from six.moves import http_client
 
 from google.resumable_media import _helpers
 from google.resumable_media import common
@@ -27,9 +26,9 @@ _CONTENT_RANGE_RE = re.compile(
     r"bytes (?P<start_byte>\d+)-(?P<end_byte>\d+)/(?P<total_bytes>\d+)",
     flags=re.IGNORECASE,
 )
-_ACCEPTABLE_STATUS_CODES = (http_client.OK, http_client.PARTIAL_CONTENT)
-_GET = u"GET"
-_ZERO_CONTENT_RANGE_HEADER = u"bytes */0"
+_ACCEPTABLE_STATUS_CODES = (http.client.OK, http.client.PARTIAL_CONTENT)
+_GET = "GET"
+_ZERO_CONTENT_RANGE_HEADER = "bytes */0"
 
 
 class DownloadBase(object):
@@ -78,7 +77,7 @@ class DownloadBase(object):
         Raises:
             NotImplementedError: Always, since virtual.
         """
-        raise NotImplementedError(u"This implementation is virtual.")
+        raise NotImplementedError("This implementation is virtual.")
 
     @staticmethod
     def _get_headers(response):
@@ -90,7 +89,7 @@ class DownloadBase(object):
         Raises:
             NotImplementedError: Always, since virtual.
         """
-        raise NotImplementedError(u"This implementation is virtual.")
+        raise NotImplementedError("This implementation is virtual.")
 
     @staticmethod
     def _get_body(response):
@@ -102,7 +101,7 @@ class DownloadBase(object):
         Raises:
             NotImplementedError: Always, since virtual.
         """
-        raise NotImplementedError(u"This implementation is virtual.")
+        raise NotImplementedError("This implementation is virtual.")
 
 
 class Download(DownloadBase):
@@ -124,7 +123,26 @@ class Download(DownloadBase):
             ``start`` to the end of the media.
         headers (Optional[Mapping[str, str]]): Extra headers that should
             be sent with the request, e.g. headers for encrypted data.
+        checksum Optional([str]): The type of checksum to compute to verify
+            the integrity of the object. The response headers must contain
+            a checksum of the requested type. If the headers lack an
+            appropriate checksum (for instance in the case of transcoded or
+            ranged downloads where the remote service does not know the
+            correct checksum) an INFO-level log will be emitted. Supported
+            values are "md5", "crc32c" and None.
     """
+
+    def __init__(
+        self, media_url, stream=None, start=None, end=None, headers=None, checksum="md5"
+    ):
+        super(Download, self).__init__(
+            media_url, stream=stream, start=start, end=end, headers=headers
+        )
+        self.checksum = checksum
+        self._bytes_downloaded = 0
+        self._expected_checksum = None
+        self._checksum_object = None
+        self._object_generation = None
 
     def _prepare_request(self):
         """Prepare the contents of an HTTP request.
@@ -148,7 +166,7 @@ class Download(DownloadBase):
         .. _sans-I/O: https://sans-io.readthedocs.io/
         """
         if self.finished:
-            raise ValueError(u"A download can only be used once.")
+            raise ValueError("A download can only be used once.")
 
         add_bytes_range(self.start, self.end, self._headers)
         return _GET, self.media_url, None, self._headers
@@ -171,7 +189,7 @@ class Download(DownloadBase):
             response, _ACCEPTABLE_STATUS_CODES, self._get_status_code
         )
 
-    def consume(self, transport):
+    def consume(self, transport, timeout=None):
         """Consume the resource to be downloaded.
 
         If a ``stream`` is attached to this download, then the downloaded
@@ -180,11 +198,18 @@ class Download(DownloadBase):
         Args:
             transport (object): An object which can make authenticated
                 requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Raises:
             NotImplementedError: Always, since virtual.
         """
-        raise NotImplementedError(u"This implementation is virtual.")
+        raise NotImplementedError("This implementation is virtual.")
 
 
 class ChunkedDownload(DownloadBase):
@@ -218,7 +243,7 @@ class ChunkedDownload(DownloadBase):
     def __init__(self, media_url, chunk_size, stream, start=0, end=None, headers=None):
         if start < 0:
             raise ValueError(
-                u"On a chunked download the starting " u"value cannot be negative."
+                "On a chunked download the starting " "value cannot be negative."
             )
         super(ChunkedDownload, self).__init__(
             media_url, stream=stream, start=start, end=end, headers=headers
@@ -291,9 +316,9 @@ class ChunkedDownload(DownloadBase):
         .. _sans-I/O: https://sans-io.readthedocs.io/
         """
         if self.finished:
-            raise ValueError(u"Download has finished.")
+            raise ValueError("Download has finished.")
         if self.invalid:
-            raise ValueError(u"Download is invalid and cannot be re-used.")
+            raise ValueError("Download is invalid and cannot be re-used.")
 
         curr_start, curr_end = self._get_byte_range()
         add_bytes_range(curr_start, curr_end, self._headers)
@@ -354,24 +379,36 @@ class ChunkedDownload(DownloadBase):
             self._get_status_code,
             callback=self._make_invalid,
         )
-        content_length = _helpers.header_required(
-            response, u"content-length", self._get_headers, callback=self._make_invalid
-        )
-        num_bytes = int(content_length)
-        _, end_byte, total_bytes = get_range_info(
+        headers = self._get_headers(response)
+        response_body = self._get_body(response)
+
+        start_byte, end_byte, total_bytes = get_range_info(
             response, self._get_headers, callback=self._make_invalid
         )
-        response_body = self._get_body(response)
-        if len(response_body) != num_bytes:
-            self._make_invalid()
-            raise common.InvalidResponse(
+
+        transfer_encoding = headers.get("transfer-encoding")
+
+        if transfer_encoding is None:
+            content_length = _helpers.header_required(
                 response,
-                u"Response is different size than content-length",
-                u"Expected",
-                num_bytes,
-                u"Received",
-                len(response_body),
+                "content-length",
+                self._get_headers,
+                callback=self._make_invalid,
             )
+            num_bytes = int(content_length)
+            if len(response_body) != num_bytes:
+                self._make_invalid()
+                raise common.InvalidResponse(
+                    response,
+                    "Response is different size than content-length",
+                    "Expected",
+                    num_bytes,
+                    "Received",
+                    len(response_body),
+                )
+        else:
+            # 'content-length' header not allowed with chunked encoding.
+            num_bytes = end_byte - start_byte + 1
 
         # First update ``bytes_downloaded``.
         self._bytes_downloaded += num_bytes
@@ -386,17 +423,24 @@ class ChunkedDownload(DownloadBase):
         # Write the response body to the stream.
         self._stream.write(response_body)
 
-    def consume_next_chunk(self, transport):
+    def consume_next_chunk(self, transport, timeout=None):
         """Consume the next chunk of the resource to be downloaded.
 
         Args:
             transport (object): An object which can make authenticated
                 requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Raises:
             NotImplementedError: Always, since virtual.
         """
-        raise NotImplementedError(u"This implementation is virtual.")
+        raise NotImplementedError("This implementation is virtual.")
 
 
 def add_bytes_range(start, end, headers):
@@ -436,18 +480,18 @@ def add_bytes_range(start, end, headers):
             return
         else:
             # NOTE: This assumes ``end`` is non-negative.
-            bytes_range = u"0-{:d}".format(end)
+            bytes_range = "0-{:d}".format(end)
     else:
         if end is None:
             if start < 0:
-                bytes_range = u"{:d}".format(start)
+                bytes_range = "{:d}".format(start)
             else:
-                bytes_range = u"{:d}-".format(start)
+                bytes_range = "{:d}-".format(start)
         else:
             # NOTE: This is invalid if ``start < 0``.
-            bytes_range = u"{:d}-{:d}".format(start, end)
+            bytes_range = "{:d}-{:d}".format(start, end)
 
-    headers[_helpers.RANGE_HEADER] = u"bytes=" + bytes_range
+    headers[_helpers.RANGE_HEADER] = "bytes=" + bytes_range
 
 
 def get_range_info(response, get_headers, callback=_helpers.do_nothing):
@@ -476,20 +520,20 @@ def get_range_info(response, get_headers, callback=_helpers.do_nothing):
         callback()
         raise common.InvalidResponse(
             response,
-            u"Unexpected content-range header",
+            "Unexpected content-range header",
             content_range,
-            u'Expected to be of the form "bytes {start}-{end}/{total}"',
+            'Expected to be of the form "bytes {start}-{end}/{total}"',
         )
 
     return (
-        int(match.group(u"start_byte")),
-        int(match.group(u"end_byte")),
-        int(match.group(u"total_bytes")),
+        int(match.group("start_byte")),
+        int(match.group("end_byte")),
+        int(match.group("total_bytes")),
     )
 
 
 def _check_for_zero_content_range(response, get_status_code, get_headers):
-    """ Validate if response status code is 416 and content range is zero.
+    """Validate if response status code is 416 and content range is zero.
 
     This is the special case for handling zero bytes files.
 
@@ -503,7 +547,7 @@ def _check_for_zero_content_range(response, get_status_code, get_headers):
     Returns:
         bool: True if content range total bytes is zero, false otherwise.
     """
-    if get_status_code(response) == http_client.REQUESTED_RANGE_NOT_SATISFIABLE:
+    if get_status_code(response) == http.client.REQUESTED_RANGE_NOT_SATISFIABLE:
         content_range = _helpers.header_required(
             response,
             _helpers.CONTENT_RANGE_HEADER,

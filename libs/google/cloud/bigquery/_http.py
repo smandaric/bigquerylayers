@@ -14,31 +14,34 @@
 
 """Create / interact with Google BigQuery connections."""
 
-from google.cloud import _http
-
+from google.cloud import _http  # type: ignore  # pytype: disable=import-error
 from google.cloud.bigquery import __version__
 
 
 class Connection(_http.JSONConnection):
     """A connection to Google BigQuery via the JSON REST API.
 
-    :type client: :class:`~google.cloud.bigquery.client.Client`
-    :param client: The client that owns the current connection.
+    Args:
+        client (google.cloud.bigquery.client.Client): The client that owns the current connection.
 
-    :type client_info: :class:`~google.api_core.client_info.ClientInfo`
-    :param client_info: (Optional) instance used to generate user agent.
+        client_info (Optional[google.api_core.client_info.ClientInfo]): Instance used to generate user agent.
+
+        api_endpoint (str): The api_endpoint to use. If None, the library will decide what endpoint to use.
     """
 
     DEFAULT_API_ENDPOINT = "https://bigquery.googleapis.com"
+    DEFAULT_API_MTLS_ENDPOINT = "https://bigquery.mtls.googleapis.com"
 
-    def __init__(self, client, client_info=None, api_endpoint=DEFAULT_API_ENDPOINT):
+    def __init__(self, client, client_info=None, api_endpoint=None):
         super(Connection, self).__init__(client, client_info)
-        self.API_BASE_URL = api_endpoint
+        self.API_BASE_URL = api_endpoint or self.DEFAULT_API_ENDPOINT
+        self.API_BASE_MTLS_URL = self.DEFAULT_API_MTLS_ENDPOINT
+        self.ALLOW_AUTO_SWITCH_TO_MTLS_URL = api_endpoint is None
         self._client_info.gapic_version = __version__
         self._client_info.client_library_version = __version__
 
-    API_VERSION = "v2"
+    API_VERSION = "v2"  # type: ignore
     """The version of the API, used in building the API call's URL."""
 
-    API_URL_TEMPLATE = "{api_base_url}/bigquery/{api_version}{path}"
+    API_URL_TEMPLATE = "{api_base_url}/bigquery/{api_version}{path}"  # type: ignore
     """A template for the URL of a particular API call."""

@@ -18,12 +18,10 @@ import calendar
 import datetime
 import re
 
-import pytz
-
 from google.protobuf import timestamp_pb2
 
 
-_UTC_EPOCH = datetime.datetime.utcfromtimestamp(0).replace(tzinfo=pytz.utc)
+_UTC_EPOCH = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
 _RFC3339_MICROS = "%Y-%m-%dT%H:%M:%S.%fZ"
 _RFC3339_NO_FRACTION = "%Y-%m-%dT%H:%M:%S"
 # datetime.strptime cannot handle nanosecond precision:  parse w/ regex
@@ -44,7 +42,7 @@ _RFC3339_NANOS = re.compile(
 
 def utcnow():
     """A :meth:`datetime.datetime.utcnow()` alias to allow mocking in tests."""
-    return datetime.datetime.utcnow()
+    return datetime.datetime.now(tz=datetime.timezone.utc).replace(tzinfo=None)
 
 
 def to_milliseconds(value):
@@ -83,9 +81,9 @@ def to_microseconds(value):
         int: Microseconds since the unix epoch.
     """
     if not value.tzinfo:
-        value = value.replace(tzinfo=pytz.utc)
+        value = value.replace(tzinfo=datetime.timezone.utc)
     # Regardless of what timezone is on the value, convert it to UTC.
-    value = value.astimezone(pytz.utc)
+    value = value.astimezone(datetime.timezone.utc)
     # Convert the datetime to a microsecond timestamp.
     return int(calendar.timegm(value.timetuple()) * 1e6) + value.microsecond
 
@@ -115,20 +113,10 @@ def from_iso8601_time(value):
 
 
 def from_rfc3339(value):
-    """Convert a microsecond-precision timestamp to datetime.
+    """Convert an RFC3339-format timestamp to a native datetime.
 
-    Args:
-        value (str): The RFC3339 string to convert.
-
-    Returns:
-        datetime.datetime: The datetime object equivalent to the timestamp in
-            UTC.
-    """
-    return datetime.datetime.strptime(value, _RFC3339_MICROS).replace(tzinfo=pytz.utc)
-
-
-def from_rfc3339_nanos(value):
-    """Convert a nanosecond-precision timestamp to a native datetime.
+    Supported formats include those without fractional seconds, or with
+    any fraction up to nanosecond precision.
 
     .. note::
         Python datetimes do not support nanosecond precision; this function
@@ -138,11 +126,11 @@ def from_rfc3339_nanos(value):
         value (str): The RFC3339 string to convert.
 
     Returns:
-        datetime.datetime: The datetime object equivalent to the timestamp in
-            UTC.
+        datetime.datetime: The datetime object equivalent to the timestamp
+        in UTC.
 
     Raises:
-        ValueError: If the timestamp does not match the RFC 3339
+        ValueError: If the timestamp does not match the RFC3339
             regular expression.
     """
     with_nanos = _RFC3339_NANOS.match(value)
@@ -163,10 +151,13 @@ def from_rfc3339_nanos(value):
         micros = 0
     else:
         scale = 9 - len(fraction)
-        nanos = int(fraction) * (10 ** scale)
+        nanos = int(fraction) * (10**scale)
         micros = nanos // 1000
 
-    return bare_seconds.replace(microsecond=micros, tzinfo=pytz.utc)
+    return bare_seconds.replace(microsecond=micros, tzinfo=datetime.timezone.utc)
+
+
+from_rfc3339_nanos = from_rfc3339  # from_rfc3339_nanos method was deprecated.
 
 
 def to_rfc3339(value, ignore_zone=True):
@@ -179,7 +170,7 @@ def to_rfc3339(value, ignore_zone=True):
             datetime object is ignored and the datetime is treated as UTC.
 
     Returns:
-        str: The RFC3339 formated string representing the datetime.
+        str: The RFC3339 formatted string representing the datetime.
     """
     if not ignore_zone and value.tzinfo is not None:
         # Convert to UTC and remove the time zone info.
@@ -215,22 +206,22 @@ class DatetimeWithNanoseconds(datetime.datetime):
         return self._nanosecond
 
     def rfc3339(self):
-        """Return an RFC 3339-compliant timestamp.
+        """Return an RFC3339-compliant timestamp.
 
         Returns:
-            (str): Timestamp string according to RFC 3339 spec.
+            (str): Timestamp string according to RFC3339 spec.
         """
         if self._nanosecond == 0:
             return to_rfc3339(self)
-        nanos = str(self._nanosecond).rjust(9, '0').rstrip("0")
+        nanos = str(self._nanosecond).rjust(9, "0").rstrip("0")
         return "{}.{}Z".format(self.strftime(_RFC3339_NO_FRACTION), nanos)
 
     @classmethod
     def from_rfc3339(cls, stamp):
-        """Parse RFC 3339-compliant timestamp, preserving nanoseconds.
+        """Parse RFC3339-compliant timestamp, preserving nanoseconds.
 
         Args:
-            stamp (str): RFC 3339 stamp, with up to nanosecond precision
+            stamp (str): RFC3339 stamp, with up to nanosecond precision
 
         Returns:
             :class:`DatetimeWithNanoseconds`:
@@ -254,7 +245,7 @@ class DatetimeWithNanoseconds(datetime.datetime):
             nanos = 0
         else:
             scale = 9 - len(fraction)
-            nanos = int(fraction) * (10 ** scale)
+            nanos = int(fraction) * (10**scale)
         return cls(
             bare.year,
             bare.month,
@@ -263,7 +254,7 @@ class DatetimeWithNanoseconds(datetime.datetime):
             bare.minute,
             bare.second,
             nanosecond=nanos,
-            tzinfo=pytz.UTC,
+            tzinfo=datetime.timezone.utc,
         )
 
     def timestamp_pb(self):
@@ -272,7 +263,11 @@ class DatetimeWithNanoseconds(datetime.datetime):
         Returns:
             (:class:`~google.protobuf.timestamp_pb2.Timestamp`): Timestamp message
         """
-        inst = self if self.tzinfo is not None else self.replace(tzinfo=pytz.UTC)
+        inst = (
+            self
+            if self.tzinfo is not None
+            else self.replace(tzinfo=datetime.timezone.utc)
+        )
         delta = inst - _UTC_EPOCH
         seconds = int(delta.total_seconds())
         nanos = self._nanosecond or self.microsecond * 1000
@@ -280,7 +275,7 @@ class DatetimeWithNanoseconds(datetime.datetime):
 
     @classmethod
     def from_timestamp_pb(cls, stamp):
-        """Parse RFC 3339-compliant timestamp, preserving nanoseconds.
+        """Parse RFC3339-compliant timestamp, preserving nanoseconds.
 
         Args:
             stamp (:class:`~google.protobuf.timestamp_pb2.Timestamp`): timestamp message
@@ -299,5 +294,5 @@ class DatetimeWithNanoseconds(datetime.datetime):
             bare.minute,
             bare.second,
             nanosecond=stamp.nanos,
-            tzinfo=pytz.UTC,
+            tzinfo=datetime.timezone.utc,
         )

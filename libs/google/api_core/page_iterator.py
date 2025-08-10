@@ -81,8 +81,6 @@ through it or using :func:`list`::
 
 import abc
 
-import six
-
 
 class Page(object):
     """Single page of results in an iterator.
@@ -96,14 +94,22 @@ class Page(object):
             Callable to convert an item from the type in the raw API response
             into the native object. Will be called with the iterator and a
             single item.
+        raw_page Optional[google.protobuf.message.Message]:
+            The raw page response.
     """
 
-    def __init__(self, parent, items, item_to_value):
+    def __init__(self, parent, items, item_to_value, raw_page=None):
         self._parent = parent
         self._num_items = len(items)
         self._remaining = self._num_items
         self._item_iter = iter(items)
         self._item_to_value = item_to_value
+        self._raw_page = raw_page
+
+    @property
+    def raw_page(self):
+        """google.protobuf.message.Message"""
+        return self._raw_page
 
     @property
     def num_items(self):
@@ -119,17 +125,14 @@ class Page(object):
         """The :class:`Page` is an iterator of items."""
         return self
 
-    def next(self):
+    def __next__(self):
         """Get the next value in the page."""
-        item = six.next(self._item_iter)
+        item = next(self._item_iter)
         result = self._item_to_value(self._parent, item)
         # Since we've successfully got the next value from the
         # iterator, we update the number of remaining.
         self._remaining -= 1
         return result
-
-    # Alias needed for Python 2/3 support.
-    __next__ = next
 
 
 def _item_to_value_identity(iterator, item):
@@ -139,8 +142,7 @@ def _item_to_value_identity(iterator, item):
     return item
 
 
-@six.add_metaclass(abc.ABCMeta)
-class Iterator(object):
+class Iterator(object, metaclass=abc.ABCMeta):
     """A generic class for iterating through API list responses.
 
     Args:
@@ -162,6 +164,8 @@ class Iterator(object):
         max_results=None,
     ):
         self._started = False
+        self.__active_iterator = None
+
         self.client = client
         """Optional[Any]: The client that created this iterator."""
         self.item_to_value = item_to_value
@@ -171,7 +175,7 @@ class Iterator(object):
             single item.
         """
         self.max_results = max_results
-        """int: The maximum number of results to fetch."""
+        """int: The maximum number of results to fetch"""
 
         # The attributes below will change over the life of the iterator.
         self.page_number = 0
@@ -219,6 +223,11 @@ class Iterator(object):
             raise ValueError("Iterator has already started", self)
         self._started = True
         return self._items_iter()
+
+    def __next__(self):
+        if self.__active_iterator is None:
+            self.__active_iterator = iter(self)
+        return next(self.__active_iterator)
 
     def _page_iter(self, increment):
         """Generator of pages of API responses.
@@ -290,7 +299,8 @@ class HTTPIterator(Iterator):
             can be found.
         page_token (str): A token identifying a page in a result set to start
             fetching results from.
-        max_results (int): The maximum number of results to fetch.
+        page_size (int): The maximum number of results to fetch per page
+        max_results (int): The maximum number of results to fetch
         extra_params (dict): Extra query string parameters for the
             API call.
         page_start (Callable[
@@ -321,6 +331,7 @@ class HTTPIterator(Iterator):
         item_to_value,
         items_key=_DEFAULT_ITEMS_KEY,
         page_token=None,
+        page_size=None,
         max_results=None,
         extra_params=None,
         page_start=_do_nothing_page_start,
@@ -333,6 +344,7 @@ class HTTPIterator(Iterator):
         self.path = path
         self._items_key = items_key
         self.extra_params = extra_params
+        self._page_size = page_size
         self._page_start = page_start
         self._next_token = next_token
         # Verify inputs / provide defaults.
@@ -360,7 +372,7 @@ class HTTPIterator(Iterator):
         if self._has_next_page():
             response = self._get_next_page_response()
             items = response.get(self._items_key, ())
-            page = Page(self, items, self.item_to_value)
+            page = Page(self, items, self.item_to_value, raw_page=response)
             self._page_start(self, page, response)
             self.next_page_token = response.get(self._next_token)
             return page
@@ -391,8 +403,18 @@ class HTTPIterator(Iterator):
         result = {}
         if self.next_page_token is not None:
             result[self._PAGE_TOKEN] = self.next_page_token
+
+        page_size = None
         if self.max_results is not None:
-            result[self._MAX_RESULTS] = self.max_results - self.num_results
+            page_size = self.max_results - self.num_results
+            if self._page_size is not None:
+                page_size = min(page_size, self._page_size)
+        elif self._page_size is not None:
+            page_size = self._page_size
+
+        if page_size is not None:
+            result[self._MAX_RESULTS] = page_size
+
         result.update(self.extra_params)
         return result
 
@@ -426,7 +448,7 @@ class _GAXIterator(Iterator):
         page_iter (google.gax.PageIterator): A GAX page iterator to be wrapped
             to conform to the :class:`Iterator` interface.
         item_to_value (Callable[Iterator, Any]): Callable to convert an item
-            from the the protobuf response into a native object. Will
+            from the protobuf response into a native object. Will
             be called with the iterator and a single item.
         max_results (int): The maximum number of results to fetch.
 
@@ -453,7 +475,7 @@ class _GAXIterator(Iterator):
                   there are no pages left.
         """
         try:
-            items = six.next(self._gax_page_iter)
+            items = next(self._gax_page_iter)
             page = Page(self, items, self.item_to_value)
             self.next_page_token = self._gax_page_iter.page_token or None
             return page
@@ -527,7 +549,7 @@ class GRPCIterator(Iterator):
 
         self.next_page_token = getattr(response, self._response_token_field)
         items = getattr(response, self._items_field)
-        page = Page(self, items, self.item_to_value)
+        page = Page(self, items, self.item_to_value, raw_page=response)
 
         return page
 

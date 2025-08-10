@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,3 +13,24 @@
 # limitations under the License.
 
 """Google OAuth 2.0 Library for Python."""
+
+import sys
+import warnings
+
+
+class Python37DeprecationWarning(DeprecationWarning):  # pragma: NO COVER
+    """
+    Deprecation warning raised when Python 3.7 runtime is detected.
+    Python 3.7 support will be dropped after January 1, 2024.
+    """
+
+    pass
+
+
+# Checks if the current runtime is Python 3.7.
+if sys.version_info.major == 3 and sys.version_info.minor == 7:  # pragma: NO COVER
+    message = (
+        "After January 1, 2024, new releases of this library will drop support "
+        "for Python 3.7."
+    )
+    warnings.warn(message, Python37DeprecationWarning)

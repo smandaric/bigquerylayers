@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,15 @@
 class GoogleAuthError(Exception):
     """Base class for all google.auth errors."""
 
+    def __init__(self, *args, **kwargs):
+        super(GoogleAuthError, self).__init__(*args)
+        retryable = kwargs.get("retryable", False)
+        self._retryable = retryable
+
+    @property
+    def retryable(self):
+        return self._retryable
+
 
 class TransportError(GoogleAuthError):
     """Used to indicate an error occurred during an HTTP request."""
@@ -28,5 +37,72 @@ class RefreshError(GoogleAuthError):
     failed."""
 
 
+class UserAccessTokenError(GoogleAuthError):
+    """Used to indicate ``gcloud auth print-access-token`` command failed."""
+
+
 class DefaultCredentialsError(GoogleAuthError):
     """Used to indicate that acquiring default credentials failed."""
+
+
+class MutualTLSChannelError(GoogleAuthError):
+    """Used to indicate that mutual TLS channel creation is failed, or mutual
+    TLS channel credentials is missing or invalid."""
+
+
+class ClientCertError(GoogleAuthError):
+    """Used to indicate that client certificate is missing or invalid."""
+
+    @property
+    def retryable(self):
+        return False
+
+
+class OAuthError(GoogleAuthError):
+    """Used to indicate an error occurred during an OAuth related HTTP
+    request."""
+
+
+class ReauthFailError(RefreshError):
+    """An exception for when reauth failed."""
+
+    def __init__(self, message=None, **kwargs):
+        super(ReauthFailError, self).__init__(
+            "Reauthentication failed. {0}".format(message), **kwargs
+        )
+
+
+class ReauthSamlChallengeFailError(ReauthFailError):
+    """An exception for SAML reauth challenge failures."""
+
+
+class MalformedError(DefaultCredentialsError, ValueError):
+    """An exception for malformed data."""
+
+
+class InvalidResource(DefaultCredentialsError, ValueError):
+    """An exception for URL error."""
+
+
+class InvalidOperation(DefaultCredentialsError, ValueError):
+    """An exception for invalid operation."""
+
+
+class InvalidValue(DefaultCredentialsError, ValueError):
+    """Used to wrap general ValueError of python."""
+
+
+class InvalidType(DefaultCredentialsError, TypeError):
+    """Used to wrap general TypeError of python."""
+
+
+class OSError(DefaultCredentialsError, EnvironmentError):
+    """Used to wrap EnvironmentError(OSError after python3.3)."""
+
+
+class TimeoutError(GoogleAuthError):
+    """Used to indicate a timeout error occurred during an HTTP request."""
+
+
+class ResponseError(GoogleAuthError):
+    """Used to indicate an error occurred when reading an HTTP response."""

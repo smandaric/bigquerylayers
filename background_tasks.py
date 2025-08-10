@@ -101,7 +101,7 @@ class RetrieveQueryResultTask(QgsTask):
             self.elements_in_layer.put(total_rows)
             QgsMessageLog.logMessage('Total rows: '+str(total_rows), 'BigQuery Layers', Qgis.Info)
 
-            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as fp:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, newline='') as fp:
                 filepath = fp.name
                 writer = csv.DictWriter(fp, fieldnames=schema_fields)
                 writer.writeheader()
@@ -176,8 +176,13 @@ class ConvertToGeopackage(QgsTask):
                 self.file_queue.put(input_file_path)
                 raise ExtensionNotFound
 
+            #cp_params = [
+            #    'cp',
+            #    input_file_path,
+            #    temp_file_path
+            #]
             cp_params = [
-                'cp',
+                'copy',
                 input_file_path,
                 temp_file_path
             ]
@@ -185,13 +190,13 @@ class ConvertToGeopackage(QgsTask):
             ogr2ogr_params = [
                 ogr2ogr_executable,
                 '-f', 'GPKG', output_file_path,
-                temp_file_path,
+                'CSV:' + str(temp_file_path),
                 '-oo', 'HEADERS=YES',
                 '-oo', 'GEOM_POSSIBLE_NAMES={}'.format(self.geometry_column),
                 '-a_srs', 'EPSG:4326'
             ]
 
-            subprocess.check_output(cp_params)
+            subprocess.check_output(cp_params, shell=True)
             subprocess.check_output(ogr2ogr_params)
 
             self.file_queue.put(output_file_path)
@@ -251,37 +256,38 @@ class LayerImportTask(QgsTask):
 
         if result is True and not self.exception:
             layer_file_path = self.layer_file_path.get()
-            if layer_file_path.split('.')[-1] == 'gpkg':
-                try:
-                    gpkg_layer = layer_file_path + '|layername=' + layer_file_path.split('/')[-1].split('.')[0]
-                    display_name = 'BigQuery layer'
-                    vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
-                
-                    if vlayer:
-                        #elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
-                        elements_in_layer = self.elements_in_layer.get()
-                        self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
-                            level=Qgis.Info)
-                except Exception as e:
-                    self.iface.messageBar().pushMessage('Layer import failed: ' + self.exception.__repr__(), level=Qgis.Critical)
+            #if layer_file_path.split('.')[-1] == 'gpkg':
+            #    try:
+            #        gpkg_layer = layer_file_path + '|layername=' + layer_file_path.split('/')[-1].split('.')[0]
+            #        display_name = 'BigQuery layer'
+            #        vlayer = self.iface.addVectorLayer(gpkg_layer, display_name, 'ogr')
+            #
+            #        if vlayer:
+            #            #elements_added = BigQueryConnector.num_rows(self.bq.client, self.bq.last_query_run)
+            #            elements_in_layer = self.elements_in_layer.get()
+            #            self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
+            #                level=Qgis.Info)
+            #    except Exception as e:
+            #        self.iface.messageBar().pushMessage('Layer import failed: ' + self.exception.__repr__(), level=Qgis.Critical)
+            vlayer = self.iface.addVectorLayer(layer_file_path, 'BigQuery layer', 'ogr')
             
             # Files not converted to gpkg, fallback to CSV import
-            else:
-                # Windows support
-                if os.name == 'nt':
-                    uri = 'file:///{file}?delimiter=,&crs=epsg:4326&wktField={field}'.format(file=layer_file_path, field=self.geom_column)
-                else:
-                    uri = 'file://{file}?delimiter=,&crs=epsg:4326&wktField={field}'.format(file=layer_file_path, field=self.geom_column)
-
-                try:
-                    vlayer = self.iface.addVectorLayer(uri, "Bigquery layer", "delimitedtext")
-
-                    if vlayer:
-                        elements_in_layer = self.elements_in_layer.get()
-                        self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
-                            level=Qgis.Info)
-                except Exception as e:
-                    self.iface.messageBar().pushMessage('Layer import failed: ' + e.__repr__(), level=Qgis.Critical)
+            #else:
+            #    # Windows support
+            #    if os.name == 'nt':
+            #        uri = 'file:///{file}?delimiter=,&crs=epsg:4326&wktField={field}'.format(file=layer_file_path, field=self.geom_column)
+            #    else:
+            #        uri = 'file://{file}?delimiter=,&crs=epsg:4326&wktField={field}'.format(file=layer_file_path, field=self.geom_column)
+            #
+            #    try:
+            #        vlayer = self.iface.addVectorLayer(uri, "Bigquery layer", "delimitedtext")
+            #
+            #        if vlayer:
+            #            elements_in_layer = self.elements_in_layer.get()
+            #            self.iface.messageBar().pushMessage('BigQuery Layers', 'Added {} elements'.format(elements_in_layer), 
+            #                level=Qgis.Info)
+            #    except Exception as e:
+            #        self.iface.messageBar().pushMessage('Layer import failed: ' + e.__repr__(), level=Qgis.Critical)
 
         self.add_all_button.setText('Add all')
         self.add_extents_button.setText('Add window extents')

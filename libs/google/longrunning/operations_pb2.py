@@ -20,8 +20,26 @@ AppEngine Standard).
 """
 
 try:
-  from google.longrunning.operations_grpc_pb2 import *
-  from google.longrunning.operations_grpc_pb2 import _OPERATION
+    from google.longrunning.operations_grpc_pb2 import (
+        _CANCELOPERATIONREQUEST,
+        _DELETEOPERATIONREQUEST,
+        _GETOPERATIONREQUEST,
+        _LISTOPERATIONSREQUEST,
+        _LISTOPERATIONSRESPONSE,
+        _OPERATION,
+        _OPERATIONINFO,
+        _OPERATIONS,
+    )
+    from google.longrunning.operations_grpc_pb2 import *
 except ImportError:
-  from google.longrunning.operations_proto_pb2 import *
-  from google.longrunning.operations_proto_pb2 import _OPERATION
+    from google.longrunning.operations_proto_pb2 import (
+        _CANCELOPERATIONREQUEST,
+        _DELETEOPERATIONREQUEST,
+        _GETOPERATIONREQUEST,
+        _LISTOPERATIONSREQUEST,
+        _LISTOPERATIONSRESPONSE,
+        _OPERATION,
+        _OPERATIONINFO,
+        _OPERATIONS,
+    )
+    from google.longrunning.operations_proto_pb2 import *

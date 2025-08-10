@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2017 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,17 +20,43 @@ API`_'s auth-related functionality.
 """
 
 import base64
+import http.client as http_client
 import json
 
-from six.moves import http_client
-
+from google.auth import _exponential_backoff
 from google.auth import _helpers
+from google.auth import credentials
 from google.auth import crypt
 from google.auth import exceptions
 
-_IAM_API_ROOT_URI = 'https://iam.googleapis.com/v1'
-_SIGN_BLOB_URI = (
-    _IAM_API_ROOT_URI + '/projects/-/serviceAccounts/{}:signBlob?alt=json')
+IAM_RETRY_CODES = {
+    http_client.INTERNAL_SERVER_ERROR,
+    http_client.BAD_GATEWAY,
+    http_client.SERVICE_UNAVAILABLE,
+    http_client.GATEWAY_TIMEOUT,
+}
+
+_IAM_SCOPE = ["https://www.googleapis.com/auth/iam"]
+
+_IAM_ENDPOINT = (
+    "https://iamcredentials.googleapis.com/v1/projects/-"
+    + "/serviceAccounts/{}:generateAccessToken"
+)
+
+_IAM_SIGN_ENDPOINT = (
+    "https://iamcredentials.googleapis.com/v1/projects/-"
+    + "/serviceAccounts/{}:signBlob"
+)
+
+_IAM_SIGNJWT_ENDPOINT = (
+    "https://iamcredentials.googleapis.com/v1/projects/-"
+    + "/serviceAccounts/{}:signJwt"
+)
+
+_IAM_IDTOKEN_ENDPOINT = (
+    "https://iamcredentials.googleapis.com/v1/"
+    + "projects/-/serviceAccounts/{}:generateIdToken"
+)
 
 
 class Signer(crypt.Signer):
@@ -68,23 +94,31 @@ class Signer(crypt.Signer):
         """Makes a request to the API signBlob API."""
         message = _helpers.to_bytes(message)
 
-        method = 'POST'
-        url = _SIGN_BLOB_URI.format(self._service_account_email)
-        headers = {}
-        body = json.dumps({
-            'bytesToSign': base64.b64encode(message).decode('utf-8'),
-        })
+        method = "POST"
+        url = _IAM_SIGN_ENDPOINT.replace(
+            credentials.DEFAULT_UNIVERSE_DOMAIN, self._credentials.universe_domain
+        ).format(self._service_account_email)
+        headers = {"Content-Type": "application/json"}
+        body = json.dumps(
+            {"payload": base64.b64encode(message).decode("utf-8")}
+        ).encode("utf-8")
 
-        self._credentials.before_request(self._request, method, url, headers)
-        response = self._request(
-            url=url, method=method, body=body, headers=headers)
+        retries = _exponential_backoff.ExponentialBackoff()
+        for _ in retries:
+            self._credentials.before_request(self._request, method, url, headers)
 
-        if response.status != http_client.OK:
-            raise exceptions.TransportError(
-                'Error calling the IAM signBytes API: {}'.format(
-                    response.data))
+            response = self._request(url=url, method=method, body=body, headers=headers)
 
-        return json.loads(response.data.decode('utf-8'))
+            if response.status in IAM_RETRY_CODES:
+                continue
+
+            if response.status != http_client.OK:
+                raise exceptions.TransportError(
+                    "Error calling the IAM signBlob API: {}".format(response.data)
+                )
+
+            return json.loads(response.data.decode("utf-8"))
+        raise exceptions.TransportError("exhausted signBlob endpoint retries")
 
     @property
     def key_id(self):
@@ -99,4 +133,4 @@ class Signer(crypt.Signer):
     @_helpers.copy_docstring(crypt.Signer)
     def sign(self, message):
         response = self._make_signing_request(message)
-        return base64.b64decode(response['signature'])
+        return base64.b64decode(response["signedBlob"])

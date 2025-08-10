@@ -15,16 +15,14 @@
 """Helpers for :mod:`protobuf`."""
 
 import collections
-try:
-    from collections import abc as collections_abc
-except ImportError:  # Python 2.7
-    import collections as collections_abc
+import collections.abc
 import copy
 import inspect
 
 from google.protobuf import field_mask_pb2
 from google.protobuf import message
 from google.protobuf import wrappers_pb2
+
 
 _SENTINEL = object()
 _WRAPPER_TYPES = (
@@ -65,9 +63,7 @@ def from_any_pb(pb_type, any_pb):
     # Unpack the Any object and populate the protobuf message instance.
     if not any_pb.Unpack(msg_pb):
         raise TypeError(
-            "Could not convert {} to {}".format(
-                any_pb.__class__.__name__, pb_type.__name__
-            )
+            f"Could not convert `{any_pb.TypeName()}` with underlying type `google.protobuf.any_pb2.Any` to `{msg_pb.DESCRIPTOR.full_name}`"
         )
 
     # Done; return the message.
@@ -177,7 +173,7 @@ def get(msg_or_dict, key, default=_SENTINEL):
     # If we get something else, complain.
     if isinstance(msg_or_dict, message.Message):
         answer = getattr(msg_or_dict, key, default)
-    elif isinstance(msg_or_dict, collections_abc.Mapping):
+    elif isinstance(msg_or_dict, collections.abc.Mapping):
         answer = msg_or_dict.get(key, default)
     else:
         raise TypeError(
@@ -202,7 +198,7 @@ def _set_field_on_message(msg, key, value):
     """Set helper for protobuf Messages."""
     # Attempt to set the value on the types of objects we know how to deal
     # with.
-    if isinstance(value, (collections_abc.MutableSequence, tuple)):
+    if isinstance(value, (collections.abc.MutableSequence, tuple)):
         # Clear the existing repeated protobuf message of any elements
         # currently inside it.
         while getattr(msg, key):
@@ -210,13 +206,13 @@ def _set_field_on_message(msg, key, value):
 
         # Write our new elements to the repeated field.
         for item in value:
-            if isinstance(item, collections_abc.Mapping):
+            if isinstance(item, collections.abc.Mapping):
                 getattr(msg, key).add(**item)
             else:
                 # protobuf's RepeatedCompositeContainer doesn't support
                 # append.
                 getattr(msg, key).extend([item])
-    elif isinstance(value, collections_abc.Mapping):
+    elif isinstance(value, collections.abc.Mapping):
         # Assign the dictionary values to the protobuf message.
         for item_key, item_value in value.items():
             set(getattr(msg, key), item_key, item_value)
@@ -239,7 +235,7 @@ def set(msg_or_dict, key, value):
         TypeError: If ``msg_or_dict`` is not a Message or dictionary.
     """
     # Sanity check: Is our target object valid?
-    if not isinstance(msg_or_dict, (collections_abc.MutableMapping, message.Message)):
+    if not isinstance(msg_or_dict, (collections.abc.MutableMapping, message.Message)):
         raise TypeError(
             "set() expected a dict or protobuf message, got {!r}.".format(
                 type(msg_or_dict)
@@ -252,12 +248,12 @@ def set(msg_or_dict, key, value):
     # If a subkey exists, then get that object and call this method
     # recursively against it using the subkey.
     if subkey is not None:
-        if isinstance(msg_or_dict, collections_abc.MutableMapping):
+        if isinstance(msg_or_dict, collections.abc.MutableMapping):
             msg_or_dict.setdefault(basekey, {})
         set(get(msg_or_dict, basekey), subkey, value)
         return
 
-    if isinstance(msg_or_dict, collections_abc.MutableMapping):
+    if isinstance(msg_or_dict, collections.abc.MutableMapping):
         msg_or_dict[key] = value
     else:
         _set_field_on_message(msg_or_dict, key, value)
@@ -290,10 +286,10 @@ def field_mask(original, modified):
 
     Args:
         original (~google.protobuf.message.Message): the original message.
-            If set to None, this field will be interpretted as an empty
+            If set to None, this field will be interpreted as an empty
             message.
         modified (~google.protobuf.message.Message): the modified message.
-            If set to None, this field will be interpretted as an empty
+            If set to None, this field will be interpreted as an empty
             message.
 
     Returns:
@@ -315,7 +311,7 @@ def field_mask(original, modified):
         modified = copy.deepcopy(original)
         modified.Clear()
 
-    if type(original) != type(modified):
+    if not isinstance(original, type(modified)):
         raise ValueError(
             "expected that both original and modified should be of the "
             'same type, received "{!r}" and "{!r}".'.format(
@@ -355,6 +351,13 @@ def _field_mask_helper(original, modified, current=""):
 
 
 def _get_path(current, name):
+    # gapic-generator-python appends underscores to field names
+    # that collide with python keywords.
+    # `_` is stripped away as it is not possible to
+    # natively define a field with a trailing underscore in protobuf.
+    # APIs will reject field masks if fields have trailing underscores.
+    # See https://github.com/googleapis/python-api-core/issues/227
+    name = name.rstrip("_")
     if not current:
         return name
     return "%s.%s" % (current, name)

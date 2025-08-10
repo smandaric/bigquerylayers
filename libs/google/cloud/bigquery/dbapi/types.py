@@ -30,31 +30,42 @@ DateFromTicks = datetime.date.fromtimestamp
 TimestampFromTicks = datetime.datetime.fromtimestamp
 
 
-def Binary(string):
+def Binary(data):
     """Contruct a DB-API binary value.
 
-    :type string: str
-    :param string: A string to encode as a binary value.
+    Args:
+        data (bytes-like): An object containing binary data and that
+                           can be converted to bytes with the `bytes` builtin.
 
-    :rtype: bytes
-    :returns: The UTF-8 encoded bytes representing the string.
+    Returns:
+        bytes: The binary data as a bytes object.
     """
-    return string.encode("utf-8")
+    if isinstance(data, int):
+        # This is not the conversion we're looking for, because it
+        # will simply create a bytes object of the given size.
+        raise TypeError("cannot convert `int` object to binary")
+
+    try:
+        return bytes(data)
+    except TypeError:
+        if isinstance(data, str):
+            return data.encode("utf-8")
+        else:
+            raise
 
 
 def TimeFromTicks(ticks, tz=None):
     """Construct a DB-API time value from the given ticks value.
 
-    :type ticks: float
-    :param ticks:
-        a number of seconds since the epoch; see the documentation of the
-        standard Python time module for details.
+    Args:
+        ticks (float):
+            a number of seconds since the epoch; see the documentation of the
+            standard Python time module for details.
 
-    :type tz: :class:`datetime.tzinfo`
-    :param tz: (Optional) time zone to use for conversion
+        tz (datetime.tzinfo): (Optional) time zone to use for conversion
 
-    :rtype: :class:`datetime.time`
-    :returns: time represented by ticks.
+    Returns:
+        datetime.time: time represented by ticks.
     """
     dt = datetime.datetime.fromtimestamp(ticks, tz=tz)
     return dt.timetz()
@@ -79,7 +90,7 @@ class _DBAPITypeObject(object):
 STRING = "STRING"
 BINARY = _DBAPITypeObject("BYTES", "RECORD", "STRUCT")
 NUMBER = _DBAPITypeObject(
-    "INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BOOLEAN", "BOOL"
+    "INTEGER", "INT64", "FLOAT", "FLOAT64", "NUMERIC", "BIGNUMERIC", "BOOLEAN", "BOOL"
 )
 DATETIME = _DBAPITypeObject("TIMESTAMP", "DATE", "TIME", "DATETIME")
 ROWID = "ROWID"

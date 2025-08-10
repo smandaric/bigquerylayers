@@ -20,10 +20,10 @@ uploads that contain both metadata and a small file as payload.
 
 
 from google.resumable_media import _upload
-from google.resumable_media.requests import _helpers
+from google.resumable_media.requests import _request_helpers
 
 
-class SimpleUpload(_helpers.RequestsMixin, _upload.SimpleUpload):
+class SimpleUpload(_request_helpers.RequestsMixin, _upload.SimpleUpload):
     """Upload a resource to a Google API.
 
     A **simple** media upload sends no metadata and completes the upload
@@ -38,7 +38,16 @@ class SimpleUpload(_helpers.RequestsMixin, _upload.SimpleUpload):
         upload_url (str): The URL where the content will be uploaded.
     """
 
-    def transmit(self, transport, data, content_type):
+    def transmit(
+        self,
+        transport,
+        data,
+        content_type,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
         """Transmit the resource to be uploaded.
 
         Args:
@@ -47,24 +56,35 @@ class SimpleUpload(_helpers.RequestsMixin, _upload.SimpleUpload):
             data (bytes): The resource content to be uploaded.
             content_type (str): The content type of the resource, e.g. a JPEG
                 image has content type ``image/jpeg``.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
         """
         method, url, payload, headers = self._prepare_request(data, content_type)
-        response = _helpers.http_request(
-            transport,
-            method,
-            url,
-            data=payload,
-            headers=headers,
-            retry_strategy=self._retry_strategy,
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
         )
-        self._process_response(response)
-        return response
 
 
-class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
+class MultipartUpload(_request_helpers.RequestsMixin, _upload.MultipartUpload):
     """Upload a resource with metadata to a Google API.
 
     A **multipart** upload sends both metadata and the resource in a single
@@ -74,12 +94,27 @@ class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
         upload_url (str): The URL where the content will be uploaded.
         headers (Optional[Mapping[str, str]]): Extra headers that should
             be sent with the request, e.g. headers for encrypted data.
+        checksum Optional([str]): The type of checksum to compute to verify
+            the integrity of the object. The request metadata will be amended
+            to include the computed value. Using this option will override a
+            manually-set checksum value. Supported values are "md5",
+            "crc32c" and None. The default is None.
 
     Attributes:
         upload_url (str): The URL where the content will be uploaded.
     """
 
-    def transmit(self, transport, data, metadata, content_type):
+    def transmit(
+        self,
+        transport,
+        data,
+        metadata,
+        content_type,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
         """Transmit the resource to be uploaded.
 
         Args:
@@ -90,6 +125,13 @@ class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
                 ACL list.
             content_type (str): The content type of the resource, e.g. a JPEG
                 image has content type ``image/jpeg``.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
@@ -97,19 +139,23 @@ class MultipartUpload(_helpers.RequestsMixin, _upload.MultipartUpload):
         method, url, payload, headers = self._prepare_request(
             data, metadata, content_type
         )
-        response = _helpers.http_request(
-            transport,
-            method,
-            url,
-            data=payload,
-            headers=headers,
-            retry_strategy=self._retry_strategy,
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
         )
-        self._process_response(response)
-        return response
 
 
-class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
+class ResumableUpload(_request_helpers.RequestsMixin, _upload.ResumableUpload):
     """Initiate and fulfill a resumable upload to a Google API.
 
     A **resumable** upload sends an initial request with the resource metadata
@@ -122,15 +168,15 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
 
     .. testsetup:: resumable-constructor
 
-       bucket = u'bucket-foo'
+       bucket = 'bucket-foo'
 
     .. doctest:: resumable-constructor
 
        >>> from google.resumable_media.requests import ResumableUpload
        >>>
        >>> url_template = (
-       ...     u'https://www.googleapis.com/upload/storage/v1/b/{bucket}/o?'
-       ...     u'uploadType=resumable')
+       ...     'https://www.googleapis.com/upload/storage/v1/b/{bucket}/o?'
+       ...     'uploadType=resumable')
        >>> upload_url = url_template.format(bucket=bucket)
        >>>
        >>> chunk_size = 3 * 1024 * 1024  # 3MB
@@ -147,11 +193,11 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
 
        import mock
        import requests
-       from six.moves import http_client
+       import http.client
 
        from google.resumable_media.requests import ResumableUpload
 
-       upload_url = u'http://test.invalid'
+       upload_url = 'http://test.invalid'
        chunk_size = 3 * 1024 * 1024  # 3MB
        upload = ResumableUpload(upload_url, chunk_size)
 
@@ -159,17 +205,17 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
        os.close(file_desc)
 
        data = b'some bytes!'
-       with open(filename, u'wb') as file_obj:
+       with open(filename, 'wb') as file_obj:
            file_obj.write(data)
 
        fake_response = requests.Response()
-       fake_response.status_code = int(http_client.OK)
+       fake_response.status_code = int(http.client.OK)
        fake_response._content = b''
-       resumable_url = u'http://test.invalid?upload_id=7up'
-       fake_response.headers[u'location'] = resumable_url
+       resumable_url = 'http://test.invalid?upload_id=7up'
+       fake_response.headers['location'] = resumable_url
 
        post_method = mock.Mock(return_value=fake_response, spec=[])
-       transport = mock.Mock(request=post_method, spec=[u'request'])
+       transport = mock.Mock(request=post_method, spec=['request'])
 
     .. doctest:: resumable-explicit-size
 
@@ -178,11 +224,11 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
        >>> upload.total_bytes is None
        True
        >>>
-       >>> stream = open(filename, u'rb')
+       >>> stream = open(filename, 'rb')
        >>> total_bytes = os.path.getsize(filename)
-       >>> metadata = {u'name': filename}
+       >>> metadata = {'name': filename}
        >>> response = upload.initiate(
-       ...     transport, stream, metadata, u'text/plain',
+       ...     transport, stream, metadata, 'text/plain',
        ...     total_bytes=total_bytes)
        >>> response
        <Response [200]>
@@ -204,26 +250,26 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
 
        import mock
        import requests
-       from six.moves import http_client
+       import http.client
 
        from google.resumable_media.requests import ResumableUpload
 
-       upload_url = u'http://test.invalid'
+       upload_url = 'http://test.invalid'
        chunk_size = 3 * 1024 * 1024  # 3MB
        upload = ResumableUpload(upload_url, chunk_size)
 
        fake_response = requests.Response()
-       fake_response.status_code = int(http_client.OK)
+       fake_response.status_code = int(http.client.OK)
        fake_response._content = b''
-       resumable_url = u'http://test.invalid?upload_id=7up'
-       fake_response.headers[u'location'] = resumable_url
+       resumable_url = 'http://test.invalid?upload_id=7up'
+       fake_response.headers['location'] = resumable_url
 
        post_method = mock.Mock(return_value=fake_response, spec=[])
-       transport = mock.Mock(request=post_method, spec=[u'request'])
+       transport = mock.Mock(request=post_method, spec=['request'])
 
        data = b'some MOAR bytes!'
-       metadata = {u'name': u'some-file.jpg'}
-       content_type = u'image/jpeg'
+       metadata = {'name': 'some-file.jpg'}
+       content_type = 'image/jpeg'
 
     .. doctest:: resumable-implicit-size
 
@@ -245,25 +291,25 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
 
        import mock
        import requests
-       from six.moves import http_client
+       import http.client
 
        from google.resumable_media.requests import ResumableUpload
 
-       upload_url = u'http://test.invalid'
+       upload_url = 'http://test.invalid'
        chunk_size = 3 * 1024 * 1024  # 3MB
        upload = ResumableUpload(upload_url, chunk_size)
 
        fake_response = requests.Response()
-       fake_response.status_code = int(http_client.OK)
+       fake_response.status_code = int(http.client.OK)
        fake_response._content = b''
-       resumable_url = u'http://test.invalid?upload_id=7up'
-       fake_response.headers[u'location'] = resumable_url
+       resumable_url = 'http://test.invalid?upload_id=7up'
+       fake_response.headers['location'] = resumable_url
 
        post_method = mock.Mock(return_value=fake_response, spec=[])
-       transport = mock.Mock(request=post_method, spec=[u'request'])
+       transport = mock.Mock(request=post_method, spec=['request'])
 
-       metadata = {u'name': u'some-file.jpg'}
-       content_type = u'application/octet-stream'
+       metadata = {'name': 'some-file.jpg'}
+       content_type = 'application/octet-stream'
 
        stream = io.BytesIO(b'data')
 
@@ -283,6 +329,13 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
             be sent with the :meth:`initiate` request, e.g. headers for
             encrypted data. These **will not** be sent with
             :meth:`transmit_next_chunk` or :meth:`recover` requests.
+        checksum Optional([str]): The type of checksum to compute to verify
+            the integrity of the object. After the upload is complete, the
+            server-computed checksum of the resulting object will be checked
+            and google.resumable_media.common.DataCorruption will be raised on
+            a mismatch. The corrupted file will not be deleted from the remote
+            host automatically. Supported values are "md5", "crc32c" and None.
+            The default is None.
 
     Attributes:
         upload_url (str): The URL where the content will be uploaded.
@@ -300,6 +353,10 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
         content_type,
         total_bytes=None,
         stream_final=True,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
     ):
         """Initiate a resumable upload.
 
@@ -331,6 +388,13 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
                 "final" (i.e. no more bytes will be added to it). In this case
                 we determine the upload size from the size of the stream. If
                 ``total_bytes`` is passed, this argument will be ignored.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
@@ -342,18 +406,29 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
             total_bytes=total_bytes,
             stream_final=stream_final,
         )
-        response = _helpers.http_request(
-            transport,
-            method,
-            url,
-            data=payload,
-            headers=headers,
-            retry_strategy=self._retry_strategy,
-        )
-        self._process_initiate_response(response)
-        return response
 
-    def transmit_next_chunk(self, transport):
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_initiate_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
+        )
+
+    def transmit_next_chunk(
+        self,
+        transport,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
         """Transmit the next chunk of the resource to be uploaded.
 
         If the current upload was initiated with ``stream_final=False``,
@@ -370,24 +445,24 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
 
            import mock
            import requests
-           from six.moves import http_client
+           import http.client
 
            from google import resumable_media
            import google.resumable_media.requests.upload as upload_mod
 
-           transport = mock.Mock(spec=[u'request'])
+           transport = mock.Mock(spec=['request'])
            fake_response = requests.Response()
-           fake_response.status_code = int(http_client.BAD_REQUEST)
+           fake_response.status_code = int(http.client.BAD_REQUEST)
            transport.request.return_value = fake_response
 
-           upload_url = u'http://test.invalid'
+           upload_url = 'http://test.invalid'
            upload = upload_mod.ResumableUpload(
                upload_url, resumable_media.UPLOAD_CHUNK_SIZE)
            # Fake that the upload has been initiate()-d
            data = b'data is here'
            upload._stream = io.BytesIO(data)
            upload._total_bytes = len(data)
-           upload._resumable_url = u'http://test.invalid?upload_id=nope'
+           upload._resumable_url = 'http://test.invalid?upload_id=nope'
 
         .. doctest:: bad-response
            :options: +NORMALIZE_WHITESPACE
@@ -400,42 +475,57 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
            ...
            >>> error
            InvalidResponse('Request failed with status code', 400,
-                           'Expected one of', <HTTPStatus.OK: 200>, 308)
+                           'Expected one of', <HTTPStatus.OK: 200>, <HTTPStatus.PERMANENT_REDIRECT: 308>)
            >>> error.response
            <Response [400]>
 
         Args:
             transport (~requests.Session): A ``requests`` object which can
                 make authenticated requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
 
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
 
         Raises:
             ~google.resumable_media.common.InvalidResponse: If the status
-                code is not 200 or 308.
+                code is not 200 or http.client.PERMANENT_REDIRECT.
+            ~google.resumable_media.common.DataCorruption: If this is the final
+                chunk, a checksum validation was requested, and the checksum
+                does not match or is not available.
         """
         method, url, payload, headers = self._prepare_request()
-        response = _helpers.http_request(
-            transport,
-            method,
-            url,
-            data=payload,
-            headers=headers,
-            retry_strategy=self._retry_strategy,
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_resumable_response(result, len(payload))
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
         )
-        self._process_response(response, len(payload))
-        return response
 
     def recover(self, transport):
-        """Recover from a failure.
-
-        This method should be used when a :class:`ResumableUpload` is in an
-        :attr:`~ResumableUpload.invalid` state due to a request failure.
+        """Recover from a failure and check the status of the current upload.
 
         This will verify the progress with the server and make sure the
         current upload is in a valid state before :meth:`transmit_next_chunk`
-        can be used again.
+        can be used again. See https://cloud.google.com/storage/docs/performing-resumable-uploads#status-check
+        for more information.
+
+        This method can be used when a :class:`ResumableUpload` is in an
+        :attr:`~ResumableUpload.invalid` state due to a request failure.
 
         Args:
             transport (~requests.Session): A ``requests`` object which can
@@ -444,15 +534,229 @@ class ResumableUpload(_helpers.RequestsMixin, _upload.ResumableUpload):
         Returns:
             ~requests.Response: The HTTP response returned by ``transport``.
         """
+        timeout = (
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        )
+
         method, url, payload, headers = self._prepare_recover_request()
         # NOTE: We assume "payload is None" but pass it along anyway.
-        response = _helpers.http_request(
-            transport,
-            method,
-            url,
-            data=payload,
-            headers=headers,
-            retry_strategy=self._retry_strategy,
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_recover_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
         )
-        self._process_recover_response(response)
-        return response
+
+
+class XMLMPUContainer(_request_helpers.RequestsMixin, _upload.XMLMPUContainer):
+    """Initiate and close an upload using the XML MPU API.
+
+    An XML MPU sends an initial request and then receives an upload ID.
+    Using the upload ID, the upload is then done in numbered parts and the
+    parts can be uploaded concurrently.
+
+    In order to avoid concurrency issues with this container object, the
+    uploading of individual parts is handled separately, by XMLMPUPart objects
+    spawned from this container class. The XMLMPUPart objects are not
+    necessarily in the same process as the container, so they do not update the
+    container automatically.
+
+    MPUs are sometimes referred to as "Multipart Uploads", which is ambiguous
+    given the JSON multipart upload, so the abbreviation "MPU" will be used
+    throughout.
+
+    See: https://cloud.google.com/storage/docs/multipart-uploads
+
+    Args:
+        upload_url (str): The URL of the object (without query parameters). The
+            initiate, PUT, and finalization requests will all use this URL, with
+            varying query parameters.
+        headers (Optional[Mapping[str, str]]): Extra headers that should
+            be sent with the :meth:`initiate` request, e.g. headers for
+            encrypted data. These headers will be propagated to individual
+            XMLMPUPart objects spawned from this container as well.
+
+    Attributes:
+        upload_url (str): The URL where the content will be uploaded.
+        upload_id (Optional(int)): The ID of the upload from the initialization
+            response.
+    """
+
+    def initiate(
+        self,
+        transport,
+        content_type,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
+        """Initiate an MPU and record the upload ID.
+
+        Args:
+            transport (object): An object which can make authenticated
+                requests.
+            content_type (str): The content type of the resource, e.g. a JPEG
+                image has content type ``image/jpeg``.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
+
+        Returns:
+            ~requests.Response: The HTTP response returned by ``transport``.
+        """
+
+        method, url, payload, headers = self._prepare_initiate_request(
+            content_type,
+        )
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_initiate_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
+        )
+
+    def finalize(
+        self,
+        transport,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
+        """Finalize an MPU request with all the parts.
+
+        Args:
+            transport (object): An object which can make authenticated
+                requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
+
+        Returns:
+            ~requests.Response: The HTTP response returned by ``transport``.
+        """
+        method, url, payload, headers = self._prepare_finalize_request()
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_finalize_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
+        )
+
+    def cancel(
+        self,
+        transport,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
+        """Cancel an MPU request and permanently delete any uploaded parts.
+
+        This cannot be undone.
+
+        Args:
+            transport (object): An object which can make authenticated
+                requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
+
+        Returns:
+            ~requests.Response: The HTTP response returned by ``transport``.
+        """
+        method, url, payload, headers = self._prepare_cancel_request()
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_cancel_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
+        )
+
+
+class XMLMPUPart(_request_helpers.RequestsMixin, _upload.XMLMPUPart):
+    def upload(
+        self,
+        transport,
+        timeout=(
+            _request_helpers._DEFAULT_CONNECT_TIMEOUT,
+            _request_helpers._DEFAULT_READ_TIMEOUT,
+        ),
+    ):
+        """Upload the part.
+
+        Args:
+            transport (object): An object which can make authenticated
+                requests.
+            timeout (Optional[Union[float, Tuple[float, float]]]):
+                The number of seconds to wait for the server response.
+                Depending on the retry strategy, a request may be repeated
+                several times using the same timeout each time.
+
+                Can also be passed as a tuple (connect_timeout, read_timeout).
+                See :meth:`requests.Session.request` documentation for details.
+
+        Returns:
+            ~requests.Response: The HTTP response returned by ``transport``.
+        """
+        method, url, payload, headers = self._prepare_upload_request()
+
+        # Wrap the request business logic in a function to be retried.
+        def retriable_request():
+            result = transport.request(
+                method, url, data=payload, headers=headers, timeout=timeout
+            )
+
+            self._process_upload_response(result)
+
+            return result
+
+        return _request_helpers.wait_and_retry(
+            retriable_request, self._get_status_code, self._retry_strategy
+        )

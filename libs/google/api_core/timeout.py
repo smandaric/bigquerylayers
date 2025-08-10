@@ -14,8 +14,9 @@
 
 """Decorators for applying timeout arguments to functions.
 
-These decorators are used to wrap API methods to apply either a constant
-or exponential timeout argument.
+These decorators are used to wrap API methods to apply either a
+Deadline-dependent (recommended), constant (DEPRECATED) or exponential
+(DEPRECATED) timeout argument.
 
 For example, imagine an API method that can take a while to return results,
 such as one that might block until a resource is ready:
@@ -54,11 +55,9 @@ matches ``api_method(request, timeout=None, retry=None)``.
 from __future__ import unicode_literals
 
 import datetime
-
-import six
+import functools
 
 from google.api_core import datetime_helpers
-from google.api_core import general_helpers
 
 _DEFAULT_INITIAL_TIMEOUT = 5.0  # seconds
 _DEFAULT_MAXIMUM_TIMEOUT = 30.0  # seconds
@@ -68,9 +67,78 @@ _DEFAULT_TIMEOUT_MULTIPLIER = 2.0
 _DEFAULT_DEADLINE = None
 
 
-@six.python_2_unicode_compatible
+class TimeToDeadlineTimeout(object):
+    """A decorator that decreases timeout set for an RPC based on how much time
+    has left till its deadline. The deadline is calculated as
+    ``now + initial_timeout`` when this decorator is first called for an rpc.
+
+    In other words this decorator implements deadline semantics in terms of a
+    sequence of decreasing timeouts t0 > t1 > t2 ... tn >= 0.
+
+    Args:
+        timeout (Optional[float]): the timeout (in seconds) to applied to the
+            wrapped function. If `None`, the target function is expected to
+            never timeout.
+    """
+
+    def __init__(self, timeout=None, clock=datetime_helpers.utcnow):
+        self._timeout = timeout
+        self._clock = clock
+
+    def __call__(self, func):
+        """Apply the timeout decorator.
+
+        Args:
+            func (Callable): The function to apply the timeout argument to.
+                This function must accept a timeout keyword argument.
+
+        Returns:
+            Callable: The wrapped function.
+        """
+
+        first_attempt_timestamp = self._clock().timestamp()
+
+        @functools.wraps(func)
+        def func_with_timeout(*args, **kwargs):
+            """Wrapped function that adds timeout."""
+
+            if self._timeout is not None:
+                # All calculations are in seconds
+                now_timestamp = self._clock().timestamp()
+
+                # To avoid usage of nonlocal but still have round timeout
+                # numbers for first attempt (in most cases the only attempt made
+                # for an RPC.
+                if now_timestamp - first_attempt_timestamp < 0.001:
+                    now_timestamp = first_attempt_timestamp
+
+                time_since_first_attempt = now_timestamp - first_attempt_timestamp
+                remaining_timeout = self._timeout - time_since_first_attempt
+
+                # Although the `deadline` parameter in `google.api_core.retry.Retry`
+                # is deprecated, and should be treated the same as the `timeout`,
+                # it is still possible for the `deadline` argument in
+                # `google.api_core.retry.Retry` to be larger than the `timeout`.
+                # See https://github.com/googleapis/python-api-core/issues/654
+                # Only positive non-zero timeouts are supported.
+                # Revert back to the initial timeout for negative or 0 timeout values.
+                if remaining_timeout < 1:
+                    remaining_timeout = self._timeout
+
+                kwargs["timeout"] = remaining_timeout
+
+            return func(*args, **kwargs)
+
+        return func_with_timeout
+
+    def __str__(self):
+        return "<TimeToDeadlineTimeout timeout={:.1f}>".format(self._timeout)
+
+
 class ConstantTimeout(object):
     """A decorator that adds a constant timeout argument.
+
+    DEPRECATED: use ``TimeToDeadlineTimeout`` instead.
 
     This is effectively equivalent to
     ``functools.partial(func, timeout=timeout)``.
@@ -95,7 +163,7 @@ class ConstantTimeout(object):
             Callable: The wrapped function.
         """
 
-        @general_helpers.wraps(func)
+        @functools.wraps(func)
         def func_with_timeout(*args, **kwargs):
             """Wrapped function that adds timeout."""
             kwargs["timeout"] = self._timeout
@@ -140,9 +208,11 @@ def _exponential_timeout_generator(initial, maximum, multiplier, deadline):
         timeout = timeout * multiplier
 
 
-@six.python_2_unicode_compatible
 class ExponentialTimeout(object):
     """A decorator that adds an exponentially increasing timeout argument.
+
+    DEPRECATED: the concept of incrementing timeout exponentially has been
+    deprecated. Use ``TimeToDeadlineTimeout`` instead.
 
     This is useful if a function is called multiple times. Each time the
     function is called this decorator will calculate a new timeout parameter
@@ -160,9 +230,9 @@ class ExponentialTimeout(object):
         deadline (Optional[float]): The overall deadline across all
             invocations. This is used to prevent a very large calculated
             timeout from pushing the overall execution time over the deadline.
-            This is especially useful in conjuction with
+            This is especially useful in conjunction with
             :mod:`google.api_core.retry`. If ``None``, the timeouts will not
-            be adjusted to accomodate an overall deadline.
+            be adjusted to accommodate an overall deadline.
     """
 
     def __init__(
@@ -178,7 +248,7 @@ class ExponentialTimeout(object):
         self._deadline = deadline
 
     def with_deadline(self, deadline):
-        """Return a copy of this teimout with the given deadline.
+        """Return a copy of this timeout with the given deadline.
 
         Args:
             deadline (float): The overall deadline across all invocations.
@@ -207,7 +277,7 @@ class ExponentialTimeout(object):
             self._initial, self._maximum, self._multiplier, self._deadline
         )
 
-        @general_helpers.wraps(func)
+        @functools.wraps(func)
         def func_with_timeout(*args, **kwargs):
             """Wrapped function that adds timeout."""
             kwargs["timeout"] = next(timeouts)

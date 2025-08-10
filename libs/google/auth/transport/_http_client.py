@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
 
 """Transport adapter for http.client, for internal use only."""
 
+import http.client as http_client
 import logging
 import socket
+import urllib
 
-import six
-from six.moves import http_client
-from six.moves import urllib
-
+from google.auth import _helpers
 from google.auth import exceptions
 from google.auth import transport
 
@@ -33,10 +32,10 @@ class Response(transport.Response):
     Args:
         response (http.client.HTTPResponse): The raw http client response.
     """
+
     def __init__(self, response):
         self._status = response.status
-        self._headers = {
-            key.lower(): value for key, value in response.getheaders()}
+        self._headers = {key.lower(): value for key, value in response.getheaders()}
         self._data = response.read()
 
     @property
@@ -55,8 +54,9 @@ class Response(transport.Response):
 class Request(transport.Request):
     """http.client transport request adapter."""
 
-    def __call__(self, url, method='GET', body=None, headers=None,
-                 timeout=None, **kwargs):
+    def __call__(
+        self, url, method="GET", body=None, headers=None, timeout=None, **kwargs
+    ):
         """Make an HTTP request using http.client.
 
         Args:
@@ -88,26 +88,28 @@ class Request(transport.Request):
         # http.client needs the host and path parts specified separately.
         parts = urllib.parse.urlsplit(url)
         path = urllib.parse.urlunsplit(
-            ('', '', parts.path, parts.query, parts.fragment))
+            ("", "", parts.path, parts.query, parts.fragment)
+        )
 
-        if parts.scheme != 'http':
+        if parts.scheme != "http":
             raise exceptions.TransportError(
-                'http.client transport only supports the http scheme, {}'
-                'was specified'.format(parts.scheme))
+                "http.client transport only supports the http scheme, {}"
+                "was specified".format(parts.scheme)
+            )
 
         connection = http_client.HTTPConnection(parts.netloc, timeout=timeout)
 
         try:
-            _LOGGER.debug('Making request: %s %s', method, url)
 
-            connection.request(
-                method, path, body=body, headers=headers, **kwargs)
+            _helpers.request_log(_LOGGER, method, url, body, headers)
+            connection.request(method, path, body=body, headers=headers, **kwargs)
             response = connection.getresponse()
+            _helpers.response_log(_LOGGER, response)
             return Response(response)
 
         except (http_client.HTTPException, socket.error) as caught_exc:
             new_exc = exceptions.TransportError(caught_exc)
-            six.raise_from(new_exc, caught_exc)
+            raise new_exc from caught_exc
 
         finally:
             connection.close()

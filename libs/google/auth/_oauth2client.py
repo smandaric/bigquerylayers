@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@
 
 from __future__ import absolute_import
 
-import six
-
 from google.auth import _helpers
 import google.auth.app_engine
 import google.auth.compute_engine
@@ -30,22 +28,21 @@ import google.oauth2.credentials
 import google.oauth2.service_account
 
 try:
-    import oauth2client.client
-    import oauth2client.contrib.gce
-    import oauth2client.service_account
+    import oauth2client.client  # type: ignore
+    import oauth2client.contrib.gce  # type: ignore
+    import oauth2client.service_account  # type: ignore
 except ImportError as caught_exc:
-    six.raise_from(
-        ImportError('oauth2client is not installed.'), caught_exc)
+    raise ImportError("oauth2client is not installed.") from caught_exc
 
 try:
-    import oauth2client.contrib.appengine  # pytype: disable=import-error
+    import oauth2client.contrib.appengine  # type: ignore
+
     _HAS_APPENGINE = True
 except ImportError:
     _HAS_APPENGINE = False
 
 
-_CONVERT_ERROR_TMPL = (
-    'Unable to convert {} to a google-auth credentials class.')
+_CONVERT_ERROR_TMPL = "Unable to convert {} to a google-auth credentials class."
 
 
 def _convert_oauth2_credentials(credentials):
@@ -65,7 +62,8 @@ def _convert_oauth2_credentials(credentials):
         token_uri=credentials.token_uri,
         client_id=credentials.client_id,
         client_secret=credentials.client_secret,
-        scopes=credentials.scopes)
+        scopes=credentials.scopes,
+    )
 
     new_credentials._expires = credentials.token_expiry
 
@@ -85,9 +83,8 @@ def _convert_service_account_credentials(credentials):
         google.oauth2.service_account.Credentials: The converted credentials.
     """
     info = credentials.serialization_data.copy()
-    info['token_uri'] = credentials.token_uri
-    return google.oauth2.service_account.Credentials.from_service_account_info(
-        info)
+    info["token_uri"] = credentials.token_uri
+    return google.oauth2.service_account.Credentials.from_service_account_info(info)
 
 
 def _convert_gce_app_assertion_credentials(credentials):
@@ -101,7 +98,8 @@ def _convert_gce_app_assertion_credentials(credentials):
         google.oauth2.service_account.Credentials: The converted credentials.
     """
     return google.auth.compute_engine.Credentials(
-        service_account_email=credentials.service_account_email)
+        service_account_email=credentials.service_account_email
+    )
 
 
 def _convert_appengine_app_assertion_credentials(credentials):
@@ -117,24 +115,22 @@ def _convert_appengine_app_assertion_credentials(credentials):
     # pylint: disable=invalid-name
     return google.auth.app_engine.Credentials(
         scopes=_helpers.string_to_scopes(credentials.scope),
-        service_account_id=credentials.service_account_id)
+        service_account_id=credentials.service_account_id,
+    )
 
 
 _CLASS_CONVERSION_MAP = {
     oauth2client.client.OAuth2Credentials: _convert_oauth2_credentials,
     oauth2client.client.GoogleCredentials: _convert_oauth2_credentials,
-    oauth2client.service_account.ServiceAccountCredentials:
-        _convert_service_account_credentials,
-    oauth2client.service_account._JWTAccessCredentials:
-        _convert_service_account_credentials,
-    oauth2client.contrib.gce.AppAssertionCredentials:
-        _convert_gce_app_assertion_credentials,
+    oauth2client.service_account.ServiceAccountCredentials: _convert_service_account_credentials,
+    oauth2client.service_account._JWTAccessCredentials: _convert_service_account_credentials,
+    oauth2client.contrib.gce.AppAssertionCredentials: _convert_gce_app_assertion_credentials,
 }
 
 if _HAS_APPENGINE:
     _CLASS_CONVERSION_MAP[
-        oauth2client.contrib.appengine.AppAssertionCredentials] = (
-            _convert_appengine_app_assertion_credentials)
+        oauth2client.contrib.appengine.AppAssertionCredentials
+    ] = _convert_appengine_app_assertion_credentials
 
 
 def convert(credentials):
@@ -168,4 +164,4 @@ def convert(credentials):
         return _CLASS_CONVERSION_MAP[credentials_class](credentials)
     except KeyError as caught_exc:
         new_exc = ValueError(_CONVERT_ERROR_TMPL.format(credentials_class))
-        six.raise_from(new_exc, caught_exc)
+        raise new_exc from caught_exc

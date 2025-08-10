@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2016 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,9 @@
 
 """Google Compute Engine authentication."""
 
+from google.auth.compute_engine._metadata import detect_gce_residency_linux
 from google.auth.compute_engine.credentials import Credentials
 from google.auth.compute_engine.credentials import IDTokenCredentials
 
 
-__all__ = [
-    'Credentials',
-    'IDTokenCredentials',
-]
+__all__ = ["Credentials", "IDTokenCredentials", "detect_gce_residency_linux"]

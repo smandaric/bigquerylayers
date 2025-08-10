@@ -17,10 +17,9 @@
 import collections
 import datetime
 import logging
+import queue as queue_module
 import threading
 import time
-
-from six.moves import queue
 
 from google.api_core import exceptions
 
@@ -71,7 +70,7 @@ class _RequestQueueGenerator(object):
     CPU consumed by spinning is pretty minuscule.
 
     Args:
-        queue (queue.Queue): The request queue.
+        queue (queue_module.Queue): The request queue.
         period (float): The number of seconds to wait for items from the queue
             before checking if the RPC is cancelled. In practice, this
             determines the maximum amount of time the request consumption
@@ -92,11 +91,9 @@ class _RequestQueueGenerator(object):
     def _is_active(self):
         # Note: there is a possibility that this starts *before* the call
         # property is set. So we have to check if self.call is set before
-        # seeing if it's active.
-        if self.call is not None and not self.call.is_active():
-            return False
-        else:
-            return True
+        # seeing if it's active. We need to return True if self.call is None.
+        # See https://github.com/googleapis/python-api-core/issues/560.
+        return self.call is None or self.call.is_active()
 
     def __iter__(self):
         if self._initial_request is not None:
@@ -108,7 +105,7 @@ class _RequestQueueGenerator(object):
         while True:
             try:
                 item = self._queue.get(timeout=self._period)
-            except queue.Empty:
+            except queue_module.Empty:
                 if not self._is_active():
                     _LOGGER.debug(
                         "Empty queue and inactive call, exiting request " "generator."
@@ -172,7 +169,9 @@ class _Throttle(object):
 
         self._time_window = time_window
         self._access_limit = access_limit
-        self._past_entries = collections.deque(maxlen=access_limit)  # least recent first
+        self._past_entries = collections.deque(
+            maxlen=access_limit
+        )  # least recent first
         self._entry_lock = threading.Lock()
 
     def __enter__(self):
@@ -198,9 +197,7 @@ class _Throttle(object):
 
     def __repr__(self):
         return "{}(access_limit={}, time_window={})".format(
-            self.__class__.__name__,
-            self._access_limit,
-            repr(self._time_window),
+            self.__class__.__name__, self._access_limit, repr(self._time_window)
         )
 
 
@@ -247,7 +244,7 @@ class BidiRpc(object):
         self._start_rpc = start_rpc
         self._initial_request = initial_request
         self._rpc_metadata = metadata
-        self._request_queue = queue.Queue()
+        self._request_queue = queue_module.Queue()
         self._request_generator = None
         self._is_active = False
         self._callbacks = []
@@ -266,6 +263,10 @@ class BidiRpc(object):
         self._callbacks.append(callback)
 
     def _on_call_done(self, future):
+        # This occurs when the RPC errors or is successfully terminated.
+        # Note that grpc's "future" here can also be a grpc.RpcError.
+        # See note in https://github.com/grpc/grpc/issues/10885#issuecomment-302651331
+        # that `grpc.RpcError` is also `grpc.call`.
         for callback in self._callbacks:
             callback(future)
 
@@ -277,7 +278,13 @@ class BidiRpc(object):
         request_generator = _RequestQueueGenerator(
             self._request_queue, initial_request=self._initial_request
         )
-        call = self._start_rpc(iter(request_generator), metadata=self._rpc_metadata)
+        try:
+            call = self._start_rpc(iter(request_generator), metadata=self._rpc_metadata)
+        except exceptions.GoogleAPICallError as exc:
+            # The original `grpc.RpcError` (which is usually also a `grpc.Call`) is
+            # available from the ``response`` property on the mapped exception.
+            self._on_call_done(exc.response)
+            raise
 
         request_generator.call = call
 
@@ -299,6 +306,8 @@ class BidiRpc(object):
         self._request_queue.put(None)
         self.call.cancel()
         self._request_generator = None
+        self._initial_request = None
+        self._callbacks = []
         # Don't set self.call to None. Keep it around so that send/recv can
         # raise the error.
 
@@ -365,7 +374,7 @@ class ResumableBidiRpc(BidiRpc):
         def should_recover(exc):
             return (
                 isinstance(exc, grpc.RpcError) and
-                exc.code() == grpc.StatusCode.UNVAILABLE)
+                exc.code() == grpc.StatusCode.UNAVAILABLE)
 
         initial_request = example_pb2.StreamingRpcRequest(
             setting='example')
@@ -423,7 +432,7 @@ class ResumableBidiRpc(BidiRpc):
 
         if throttle_reopen:
             self._reopen_throttle = _Throttle(
-                access_limit=5, time_window=datetime.timedelta(seconds=10),
+                access_limit=5, time_window=datetime.timedelta(seconds=10)
             )
         else:
             self._reopen_throttle = None
@@ -590,7 +599,7 @@ class BackgroundConsumer(object):
         def should_recover(exc):
             return (
                 isinstance(exc, grpc.RpcError) and
-                exc.code() == grpc.StatusCode.UNVAILABLE)
+                exc.code() == grpc.StatusCode.UNAVAILABLE)
 
         initial_request = example_pb2.StreamingRpcRequest(
             setting='example')
@@ -615,12 +624,15 @@ class BackgroundConsumer(object):
             ``open()``ed yet.
         on_response (Callable[[protobuf.Message], None]): The callback to
             be called for every response on the stream.
+        on_fatal_exception (Callable[[Exception], None]): The callback to
+            be called on fatal errors during consumption. Default None.
     """
 
-    def __init__(self, bidi_rpc, on_response):
+    def __init__(self, bidi_rpc, on_response, on_fatal_exception=None):
         self._bidi_rpc = bidi_rpc
         self._on_response = on_response
         self._paused = False
+        self._on_fatal_exception = on_fatal_exception
         self._wake = threading.Condition()
         self._thread = None
         self._operational_lock = threading.Lock()
@@ -645,6 +657,7 @@ class BackgroundConsumer(object):
                 # Keeping the lock throughout avoids that.
                 # In the future, we could use `Condition.wait_for` if we drop
                 # Python 2.7.
+                # See: https://github.com/googleapis/python-api-core/issues/211
                 with self._wake:
                     while self._paused:
                         _LOGGER.debug("paused, waiting for waking.")
@@ -654,7 +667,8 @@ class BackgroundConsumer(object):
                 _LOGGER.debug("waiting for recv.")
                 response = self._bidi_rpc.recv()
                 _LOGGER.debug("recved response.")
-                self._on_response(response)
+                if self._on_response is not None:
+                    self._on_response(response)
 
         except exceptions.GoogleAPICallError as exc:
             _LOGGER.debug(
@@ -665,6 +679,8 @@ class BackgroundConsumer(object):
                 exc,
                 exc_info=True,
             )
+            if self._on_fatal_exception is not None:
+                self._on_fatal_exception(exc)
 
         except Exception as exc:
             _LOGGER.exception(
@@ -672,6 +688,8 @@ class BackgroundConsumer(object):
                 _BIDIRECTIONAL_CONSUMER_NAME,
                 exc,
             )
+            if self._on_fatal_exception is not None:
+                self._on_fatal_exception(exc)
 
         _LOGGER.info("%s exiting", _BIDIRECTIONAL_CONSUMER_NAME)
 
@@ -683,8 +701,8 @@ class BackgroundConsumer(object):
                 name=_BIDIRECTIONAL_CONSUMER_NAME,
                 target=self._thread_main,
                 args=(ready,),
+                daemon=True,
             )
-            thread.daemon = True
             thread.start()
             # Other parts of the code rely on `thread.is_alive` which
             # isn't sufficient to know if a thread is active, just that it may
@@ -695,7 +713,11 @@ class BackgroundConsumer(object):
             _LOGGER.debug("Started helper thread %s", thread.name)
 
     def stop(self):
-        """Stop consuming the stream and shutdown the background thread."""
+        """Stop consuming the stream and shutdown the background thread.
+
+        NOTE: Cannot be called within `_thread_main`, since it is not
+        possible to join a thread to itself.
+        """
         with self._operational_lock:
             self._bidi_rpc.close()
 
@@ -709,6 +731,8 @@ class BackgroundConsumer(object):
                     _LOGGER.warning("Background thread did not exit.")
 
             self._thread = None
+            self._on_response = None
+            self._on_fatal_exception = None
 
     @property
     def is_active(self):
@@ -727,7 +751,7 @@ class BackgroundConsumer(object):
         """Resumes the response stream."""
         with self._wake:
             self._paused = False
-            self._wake.notifyAll()
+            self._wake.notify_all()
 
     @property
     def is_paused(self):

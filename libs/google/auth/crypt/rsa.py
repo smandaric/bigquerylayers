@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2017 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,5 +26,5 @@ except ImportError:  # pragma: NO COVER
     # unavailable.
     from google.auth.crypt import _python_rsa
 
-    RSASigner = _python_rsa.RSASigner
-    RSAVerifier = _python_rsa.RSAVerifier
+    RSASigner = _python_rsa.RSASigner  # type: ignore
+    RSAVerifier = _python_rsa.RSAVerifier  # type: ignore
