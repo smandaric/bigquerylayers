@@ -1,5 +1,3 @@
-
-# -*- coding: utf-8 -*-
 """
 /***************************************************************************
  BigQueryLayers
@@ -22,15 +20,19 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
-# Initialize Qt resources from file resources.py
-from .resources import *
+
+import os.path
+
+from qgis.PyQt.QtCore import QCoreApplication, QSettings, Qt, QTranslator, qVersion
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QAction
 
 # Import the code for the DockWidget
 from .bigquery_layers_dockwidget import BigQueryLayersDockWidget
-import os.path
+
+# Initialize Qt resources from file resources.py
+from .resources import *
+
 
 class BigQueryLayers:
     """QGIS Plugin Implementation."""
@@ -50,31 +52,29 @@ class BigQueryLayers:
         self.plugin_dir = os.path.dirname(__file__)
 
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale = QSettings().value("locale/userLocale")[0:2]
         locale_path = os.path.join(
-            self.plugin_dir,
-            'i18n',
-            'BigQueryLayers_{}.qm'.format(locale))
+            self.plugin_dir, "i18n", f"BigQueryLayers_{locale}.qm"
+        )
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
 
-            if qVersion() > '4.3.3':
+            if qVersion() > "4.3.3":
                 QCoreApplication.installTranslator(self.translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&BigQuery Layers')
+        self.menu = self.tr("&BigQuery Layers")
         # TODO: We are going to let the user set this up in a future iteration
-        self.toolbar = self.iface.addToolBar(u'BigQueryLayers')
-        self.toolbar.setObjectName(u'BigQueryLayers')
+        self.toolbar = self.iface.addToolBar("BigQueryLayers")
+        self.toolbar.setObjectName("BigQueryLayers")
 
-        #print "** INITIALIZING BigQueryLayers"
+        # print "** INITIALIZING BigQueryLayers"
 
         self.pluginIsActive = False
         self.dockwidget = None
-
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -89,8 +89,7 @@ class BigQueryLayers:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('BigQueryLayers', message)
-
+        return QCoreApplication.translate("BigQueryLayers", message)
 
     def add_action(
         self,
@@ -102,7 +101,8 @@ class BigQueryLayers:
         add_to_toolbar=True,
         status_tip=None,
         whats_this=None,
-        parent=None):
+        parent=None,
+    ):
         """Add a toolbar icon to the toolbar.
 
         :param icon_path: Path to the icon for this action. Can be a resource
@@ -154,38 +154,35 @@ class BigQueryLayers:
             action.setWhatsThis(whats_this)
 
         if add_to_toolbar:
-            #self.toolbar.addAction(action)
+            # self.toolbar.addAction(action)
             self.iface.addToolBarIcon(action)
 
         if add_to_menu:
-            self.iface.addPluginToDatabaseMenu(
-                self.menu,
-                action)
+            self.iface.addPluginToDatabaseMenu(self.menu, action)
 
         self.actions.append(action)
 
         return action
 
-
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        #icon_path = ':/plugins/bigquerylayers/icon.png'
-        icon_path = os.path.join(
-            os.path.dirname(__file__), 'icon.png')
+        # icon_path = ':/plugins/bigquerylayers/icon.png'
+        icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
 
         self.add_action(
             icon_path,
-            text=self.tr(u'BigQuery Layers'),
+            text=self.tr("BigQuery Layers"),
             callback=self.run,
-            parent=self.iface.mainWindow())
+            parent=self.iface.mainWindow(),
+        )
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def onClosePlugin(self):
         """Cleanup necessary items here when plugin dockwidget is closed"""
 
-        #print "** CLOSING BigQueryLayers"
+        # print "** CLOSING BigQueryLayers"
 
         # disconnects
         self.dockwidget.closingPlugin.disconnect(self.onClosePlugin)
@@ -198,21 +195,18 @@ class BigQueryLayers:
 
         self.pluginIsActive = False
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
 
-        #print "** UNLOAD BigQueryLayers"
+        # print "** UNLOAD BigQueryLayers"
 
         for action in self.actions:
-            self.iface.removePluginDatabaseMenu(
-                self.tr(u'&BigQuery Layers'),
-                action)
+            self.iface.removePluginDatabaseMenu(self.tr("&BigQuery Layers"), action)
             self.iface.removeToolBarIcon(action)
         # remove the toolbar
         del self.toolbar
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def run(self):
         """Run method that loads and starts the plugin"""
@@ -220,12 +214,12 @@ class BigQueryLayers:
         if not self.pluginIsActive:
             self.pluginIsActive = True
 
-            #print "** STARTING BigQueryLayers"
+            # print "** STARTING BigQueryLayers"
 
             # dockwidget may not exist if:
             #    first run of plugin
             #    removed on close (see self.onClosePlugin method)
-            if self.dockwidget == None:
+            if self.dockwidget is None:
                 # Create the dockwidget (after translation) and keep reference
                 self.dockwidget = BigQueryLayersDockWidget(iface=self.iface)
 

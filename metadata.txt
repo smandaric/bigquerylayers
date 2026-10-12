@@ -10,7 +10,7 @@
 name=BigQuery Layers
 qgisMinimumVersion=3.0
 description=Import data from BigQuery. 
-version=0.2.1
+version=0.3.0
 author=Stefan Mandaric
 email=stefan.mandaric@gmail.com
 
@@ -23,7 +23,10 @@ repository=https://github.com/smandaric/bigquerylayers
 # Recommended items:
 
 # Uncomment the following line and add your changelog:
-changelog=0.2.1 2019-12-01
+changelog=0.3.0 2026-10-07
+    * Added QGIS 3.40 / Python 3.12 compatibility and modern Google Cloud dependency installation.
+    * Fixed Windows GeoPackage conversion and plugin package contents.
+    0.2.1 2019-12-01
     * Bugfix: Handle missing ogr2ogr binary
     0.2.0 2019-10-18
     * New feature: Long running result fetching can be cancelled in GUI
